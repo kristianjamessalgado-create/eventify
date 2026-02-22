@@ -446,10 +446,13 @@ $stmt->close();
                     <?php $selectedDept = $event['department'] ?? 'ALL'; ?>
                     <select id="department" name="department" class="form-control" required>
                         <option value="ALL" <?= $selectedDept === 'ALL' ? 'selected' : '' ?>>All Departments</option>
-                        <option value="BSIT" <?= $selectedDept === 'BSIT' ? 'selected' : '' ?>>BSIT</option>
-                        <option value="BSHM" <?= $selectedDept === 'BSHM' ? 'selected' : '' ?>>BSHM</option>
-                        <option value="CONAHS" <?= $selectedDept === 'CONAHS' ? 'selected' : '' ?>>CONAHS</option>
-                        <option value="Senior High" <?= $selectedDept === 'Senior High' ? 'selected' : '' ?>>Senior High</option>
+                        <option value="High school department" <?= $selectedDept === 'High school department' ? 'selected' : '' ?>>High School Department</option>
+                        <option value="College of Communication, Information and Technology" <?= $selectedDept === 'College of Communication, Information and Technology' ? 'selected' : '' ?>>College of Communication, Information and Technology</option>
+                        <option value="College of Accountancy and Business" <?= $selectedDept === 'College of Accountancy and Business' ? 'selected' : '' ?>>College of Accountancy and Business</option>
+                        <option value="School of Law and Political Science" <?= $selectedDept === 'School of Law and Political Science' ? 'selected' : '' ?>>School of Law and Political Science</option>
+                        <option value="College of Education" <?= $selectedDept === 'College of Education' ? 'selected' : '' ?>>College of Education</option>
+                        <option value="College of Nursing and Allied health sciences" <?= $selectedDept === 'College of Nursing and Allied health sciences' ? 'selected' : '' ?>>College of Nursing and Allied health sciences</option>
+                        <option value="College of Hospitality Management" <?= $selectedDept === 'College of Hospitality Management' ? 'selected' : '' ?>>College of Hospitality Management</option>
                     </select>
                 </div>
 
@@ -465,10 +468,34 @@ $stmt->close();
         </div>
     </div>
 
+    <!-- Message Modal (replaces alert) -->
+    <div class="modal fade" id="messageModal" tabindex="-1" aria-labelledby="messageModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="messageModalLabel"><i class="fas fa-exclamation-circle me-2"></i>Please fix the following</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p id="messageModalBody" class="mb-0"></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">OK</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
     <script>
+        function showMessageModal(msg) {
+            var el = document.getElementById('messageModalBody');
+            if (el) el.textContent = msg;
+            var modal = new bootstrap.Modal(document.getElementById('messageModal'));
+            modal.show();
+        }
         document.getElementById('editEventForm').addEventListener('submit', function(e) {
             const title = document.getElementById('title').value.trim();
             const date  = document.getElementById('date').value;
@@ -476,21 +503,21 @@ $stmt->close();
 
             if (!title) {
                 e.preventDefault();
-                alert('Please enter an event title.');
+                showMessageModal('Please enter an event title.');
                 document.getElementById('title').focus();
                 return false;
             }
 
             if (!date) {
                 e.preventDefault();
-                alert('Please select an event date.');
+                showMessageModal('Please select an event date.');
                 document.getElementById('date').focus();
                 return false;
             }
 
             if (!loc) {
                 e.preventDefault();
-                alert('Please enter an event location.');
+                showMessageModal('Please enter an event location.');
                 document.getElementById('location').focus();
                 return false;
             }
@@ -501,7 +528,7 @@ $stmt->close();
 
             if (eventDate < today) {
                 e.preventDefault();
-                alert('Event date cannot be in the past.');
+                showMessageModal('Event date cannot be in the past.');
                 document.getElementById('date').focus();
                 return false;
             }

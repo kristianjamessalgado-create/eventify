@@ -47,8 +47,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($eventDate < $today) {
                 $error = "Event date cannot be in the past.";
             } else {
-                // Validate department value
-                $allowedDepartments = ['ALL','BSIT','BSHM','CONAHS','Senior High'];
+                // Validate department value (include all configured departments)
+                $allowedDepartments = [
+                    'ALL',
+                    'BSIT',
+                    'BSHM',
+                    'CONAHS',
+                    'Senior High',
+                    'High school department',
+                    'College of Communication, Information and Technology',
+                    'College of Accountancy and Business',
+                    'School of Law and Political Science',
+                    'College of Education',
+                    'College of Nursing and Allied health sciences',
+                    'College of Hospitality Management'
+                ];
                 if (!in_array($department, $allowedDepartments, true)) {
                     $department = 'ALL';
                 }
@@ -302,6 +315,36 @@ $stmt->close();
         .input-icon .form-control {
             padding-left: 45px;
         }
+
+                /* Location autocomplete dropdown (no API) */
+                .location-suggestions {
+                    position: absolute;
+                    top: 100%;
+                    left: 0;
+                    right: 0;
+                    background: #ffffff;
+                    border: 1px solid #dadce0;
+                    border-top: none;
+                    max-height: 200px;
+                    overflow-y: auto;
+                    border-radius: 0 0 8px 8px;
+                    box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+                    z-index: 20;
+                    display: none;
+                }
+
+                .location-suggestion-item {
+                    padding: 8px 14px;
+                    font-size: 13px;
+                    cursor: pointer;
+                    white-space: nowrap;
+                    text-overflow: ellipsis;
+                    overflow: hidden;
+                }
+
+                .location-suggestion-item:hover {
+                    background: #f1f3f4;
+                }
         
         @media (max-width: 768px) {
             .create-event-body {
@@ -401,19 +444,24 @@ $stmt->close();
                     <label for="location">
                         Location <span class="required">*</span>
                     </label>
-                    <div class="input-icon">
+                    <div class="input-icon" style="position: relative;">
                         <i class="fas fa-map-marker-alt"></i>
                         <input 
-                            type="text" 
-                            id="location" 
-                            name="location" 
-                            class="form-control" 
-                            placeholder="Enter event location"
+                            type="text"
+                            id="location"
+                            name="location"
+                            class="form-control"
+                            placeholder="Start typing a place in Leyte"
                             value="<?= htmlspecialchars($_POST['location'] ?? '') ?>"
                             required
                             maxlength="100"
+                            autocomplete="off"
                         >
+                        <div id="locationSuggestions" class="location-suggestions"></div>
                     </div>
+                    <small class="text-muted d-block mt-1">
+                        This list is based on common places in Leyte (no internet/API required).
+                    </small>
                 </div>
                 
                 <div class="form-group">
@@ -423,10 +471,13 @@ $stmt->close();
                     <select id="department" name="department" class="form-control" required>
                         <?php $selectedDept = $_POST['department'] ?? 'ALL'; ?>
                         <option value="ALL" <?= $selectedDept === 'ALL' ? 'selected' : '' ?>>All Departments</option>
-                        <option value="BSIT" <?= $selectedDept === 'BSIT' ? 'selected' : '' ?>>BSIT</option>
-                        <option value="BSHM" <?= $selectedDept === 'BSHM' ? 'selected' : '' ?>>BSHM</option>
-                        <option value="CONAHS" <?= $selectedDept === 'CONAHS' ? 'selected' : '' ?>>CONAHS</option>
-                        <option value="Senior High" <?= $selectedDept === 'Senior High' ? 'selected' : '' ?>>Senior High</option>
+                        <option value="High school department" <?= $selectedDept === 'High school department' ? 'selected' : '' ?>>High School Department</option>
+                        <option value="College of Communication, Information and Technology" <?= $selectedDept === 'College of Communication, Information and Technology' ? 'selected' : '' ?>>College of Communication, Information and Technology</option>
+                        <option value="College of Accountancy and Business" <?= $selectedDept === 'College of Accountancy and Business' ? 'selected' : '' ?>>College of Accountancy and Business</option>
+                        <option value="School of Law and Political Science" <?= $selectedDept === 'School of Law and Political Science' ? 'selected' : '' ?>>School of Law and Political Science</option>
+                        <option value="College of Education" <?= $selectedDept === 'College of Education' ? 'selected' : '' ?>>College of Education</option>
+                        <option value="College of Nursing and Allied health sciences" <?= $selectedDept === 'College of Nursing and Allied health sciences' ? 'selected' : '' ?>>College of Nursing and Allied health sciences</option>
+                        <option value="College of Hospitality Management" <?= $selectedDept === 'College of Hospitality Management' ? 'selected' : '' ?>>College of Hospitality Management</option>
                     </select>
                 </div>
                 
@@ -442,10 +493,113 @@ $stmt->close();
         </div>
     </div>
     
+    <!-- Message Modal (replaces alert) -->
+    <div class="modal fade" id="messageModal" tabindex="-1" aria-labelledby="messageModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="messageModalLabel"><i class="fas fa-exclamation-circle me-2"></i>Please fix the following</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p id="messageModalBody" class="mb-0"></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">OK</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-    
+
     <script>
+        function showMessageModal(msg) {
+            var el = document.getElementById('messageModalBody');
+            if (el) el.textContent = msg;
+            var modal = new bootstrap.Modal(document.getElementById('messageModal'));
+            modal.show();
+        }
+        // Simple Leyte locations list (no external API)
+        const leyteLocations = [
+            'Tacloban City',
+            'Tacloban City Hall',
+            'Robinsons Place Tacloban',
+            'Palo, Leyte',
+            'Leyte Academic Center, Palo',
+            'Ormoc City',
+            'Western Leyte College, Ormoc City',
+            'Baybay City',
+            'Abuyog, Leyte',
+            'Alangalang, Leyte',
+            'Burauen, Leyte',
+            'Carigara, Leyte',
+            'Dagami, Leyte',
+            'Dulag, Leyte',
+            'Hilongos, Leyte',
+            'Jaro, Leyte',
+            'Kananga, Leyte',
+            'La Paz, Leyte',
+            'MacArthur, Leyte',
+            'Mayorga, Leyte',
+            'Palompon, Leyte',
+            'Tanauan, Leyte',
+            'Tolosa, Leyte',
+            'Villaba, Leyte'
+        ];
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const input = document.getElementById('location');
+            const suggestionsBox = document.getElementById('locationSuggestions');
+
+            if (input && suggestionsBox) {
+                const renderSuggestions = (value) => {
+                    const query = value.trim().toLowerCase();
+                    suggestionsBox.innerHTML = '';
+
+                    if (!query) {
+                        suggestionsBox.style.display = 'none';
+                        return;
+                    }
+
+                    const matches = leyteLocations.filter(loc =>
+                        loc.toLowerCase().includes(query)
+                    ).slice(0, 8); // limit to 8 suggestions
+
+                    if (!matches.length) {
+                        suggestionsBox.style.display = 'none';
+                        return;
+                    }
+
+                    matches.forEach(loc => {
+                        const item = document.createElement('div');
+                        item.className = 'location-suggestion-item';
+                        item.textContent = loc;
+                        item.addEventListener('click', () => {
+                            input.value = loc;
+                            suggestionsBox.innerHTML = '';
+                            suggestionsBox.style.display = 'none';
+                            input.focus();
+                        });
+                        suggestionsBox.appendChild(item);
+                    });
+
+                    suggestionsBox.style.display = 'block';
+                };
+
+                input.addEventListener('input', function () {
+                    renderSuggestions(this.value);
+                });
+
+                input.addEventListener('blur', function () {
+                    setTimeout(() => {
+                        suggestionsBox.style.display = 'none';
+                    }, 150);
+                });
+            }
+        });
+
         // Form validation
         document.getElementById('createEventForm').addEventListener('submit', function(e) {
             const title = document.getElementById('title').value.trim();
@@ -454,33 +608,32 @@ $stmt->close();
             
             if (!title) {
                 e.preventDefault();
-                alert('Please enter an event title.');
+                showMessageModal('Please enter an event title.');
                 document.getElementById('title').focus();
                 return false;
             }
             
             if (!date) {
                 e.preventDefault();
-                alert('Please select an event date.');
+                showMessageModal('Please select an event date.');
                 document.getElementById('date').focus();
                 return false;
             }
             
             if (!location) {
                 e.preventDefault();
-                alert('Please enter an event location.');
+                showMessageModal('Please enter an event location.');
                 document.getElementById('location').focus();
                 return false;
             }
             
-            // Check if date is in the past
             const today = new Date();
             today.setHours(0, 0, 0, 0);
             const eventDate = new Date(date);
             
             if (eventDate < today) {
                 e.preventDefault();
-                alert('Event date cannot be in the past.');
+                showMessageModal('Event date cannot be in the past.');
                 document.getElementById('date').focus();
                 return false;
             }

@@ -43,7 +43,8 @@ body {
     position: relative;
     width: 400px;
     max-width: 90%;
-    padding: 40px 30px;
+    max-height: 90vh;
+    padding: 32px 24px;
     background: rgba(0,0,0,0.6);
     border-radius: 20px;
     box-shadow: 0 0 30px rgba(0,255,0,0.3);
@@ -59,6 +60,8 @@ body {
     transform: translateY(20px);
     animation: fadeInUp 0.6s ease-out 0.3s forwards;
     margin: auto;
+    overflow-y: auto;
+    overflow-x: hidden;
 }
 
 @keyframes fadeInUp {
@@ -82,17 +85,21 @@ body {
 }
 
 .form-box h1 {
-    font-size: 28px;
-    margin-bottom: 25px;
+    font-size: 26px;
+    margin-bottom: 18px;
     color: white;
     text-shadow: 0 0 5px #00ff00;
+}
+
+.container.active .form-box.register h1 {
+    margin-bottom: 14px;
 }
 
 /* === INPUT BOXES === */
 .input-box {
     position: relative;
     width: 100%;
-    margin: 15px 0;
+    margin: 12px 0;
 }
 
 .input-box input,
@@ -105,6 +112,27 @@ body {
     color: white;
     font-size: 14px;
     transition: 0.3s all ease-in-out;
+    min-height: 44px;
+}
+
+.input-box select {
+    cursor: pointer;
+    appearance: auto;
+    -webkit-appearance: menulist;
+}
+
+#departmentWrapper {
+    margin-top: 4px;
+}
+
+/* Department dropdown stays within container */
+#departmentSelect {
+    max-width: 100%;
+}
+
+.input-box select option {
+    background: #1a1a2e;
+    color: #fff;
 }
 
 .input-box input::placeholder,
@@ -174,6 +202,16 @@ body {
 .container.active .form-box.register {
     display: flex;
     flex-direction: column;
+    width: 100%;
+    min-height: 0;
+    flex-shrink: 0;
+}
+
+.form-box.register form {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
 /* === ALERT MESSAGES === */
@@ -204,24 +242,79 @@ body {
     color: #ff6b6b;
 }
 
+.register-error {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    animation: shake 0.4s ease;
+}
+
+.register-error i {
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-4px); }
+    75% { transform: translateX(4px); }
+}
+
 .alert-success {
     background: rgba(0, 255, 0, 0.2);
     border: 1px solid rgba(0, 255, 0, 0.5);
     color: #00ff00;
 }
 
+.field-hint {
+    display: block;
+    width: 100%;
+    margin-top: 4px;
+    margin-bottom: 4px;
+    font-size: 12px;
+    color: rgba(255,255,255,0.75);
+    text-align: left;
+}
+
+.caps-warning {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+    font-size: 12px;
+    color: #ff6b6b;
+}
+
+.caps-warning i {
+    font-size: 11px;
+}
+
 /* === MOBILE RESPONSIVE === */
 @media (max-width: 480px) {
     .container {
         width: 90%;
-        padding: 30px 20px;
+        max-width: 380px;
+        padding: 24px 20px;
+        max-height: 85vh;
     }
     .form-box h1 {
-        font-size: 24px;
+        font-size: 22px;
+    }
+    .container.active .form-box.register h1 {
+        font-size: 22px;
+        margin-bottom: 12px;
+    }
+    .input-box {
+        margin: 10px 0;
     }
     .btn {
         font-size: 14px;
         padding: 10px;
+    }
+    .alert {
+        margin-bottom: 14px;
+        padding: 10px 12px;
+        font-size: 13px;
     }
 }
 
@@ -232,12 +325,6 @@ html, body {
 
 body {
     position: relative;
-}
-
-.container {
-    max-height: 100vh;
-    overflow-y: auto;
-    overflow-x: hidden;
 }
 
 .container::-webkit-scrollbar {

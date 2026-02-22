@@ -12,14 +12,17 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'organizer') {
 
 $session_user_id = $_SESSION['user_id'];
 
-// Fetch user info
-$stmt = $conn->prepare("SELECT name FROM users WHERE id = ?");
+// Fetch user info (for profile editing and display)
+$user = ['id' => $session_user_id, 'name' => '', 'profile_picture' => null];
+$stmt = $conn->prepare("SELECT name, profile_picture FROM users WHERE id = ?");
 $stmt->bind_param("i", $session_user_id);
 $stmt->execute();
-$stmt->bind_result($db_name);
+$stmt->bind_result($db_name, $db_profile_picture);
 $stmt->fetch();
-$user_name = $db_name ?? 'Organizer';
 $stmt->close();
+$user['name'] = $db_name ?? '';
+$user['profile_picture'] = $db_profile_picture;
+$user_name = $user['name'] ?: 'Organizer';
 
 // Fetch events
 $events = [];

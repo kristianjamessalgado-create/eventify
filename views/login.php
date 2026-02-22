@@ -4,8 +4,8 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 $error = $_GET['error'] ?? '';
 $success = $_GET['success'] ?? '';
+$is_register_form = isset($_GET['form']) && $_GET['form'] === 'register';
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -30,7 +30,7 @@ $success = $_GET['success'] ?? '';
     Your browser does not support the video tag.
 </video>
 
-<div class="container">
+<div class="container<?= $is_register_form ? ' active' : '' ?>">
 
     <!-- LOGIN FORM -->
     <div class="form-box login">
@@ -65,15 +65,15 @@ $success = $_GET['success'] ?? '';
     <div class="form-box register">
         <h1>Register</h1>
 
-        <?php if ($error && isset($_GET['form']) && $_GET['form'] === 'register'): ?>
-            <div class="alert alert-danger" role="alert">
-                <?= htmlspecialchars($error) ?>
+        <?php if ($error && $is_register_form): ?>
+            <div class="alert alert-danger register-error" role="alert">
+                <i class="fa-solid fa-circle-exclamation"></i> <?= htmlspecialchars($error) ?>
             </div>
         <?php endif; ?>
 
-        <?php if ($success && isset($_GET['form']) && $_GET['form'] === 'register'): ?>
+        <?php if ($success && $is_register_form): ?>
             <div class="alert alert-success" role="alert">
-                <?= htmlspecialchars($success) ?>
+                <i class="fa-solid fa-circle-check"></i> <?= htmlspecialchars($success) ?>
             </div>
         <?php endif; ?>
 
@@ -93,6 +93,12 @@ $success = $_GET['success'] ?? '';
                 <input type="password" name="password" placeholder="Password" id="registerPassword" required>
                 <i class="fa-solid fa-eye" id="toggleRegisterPassword" style="cursor:pointer;"></i>
             </div>
+            <small class="field-hint">
+                Password must be at least 8 characters, with 1 uppercase and 1 special character.
+            </small>
+            <small class="caps-warning" id="capsWarning" style="display:none;">
+                <i class="fa-solid fa-lock"></i> Caps Lock is ON.
+            </small>
 
             <div class="input-box">
                 <input type="password" name="confirm_password" placeholder="Confirm Password" id="confirmPassword" required>
@@ -104,16 +110,20 @@ $success = $_GET['success'] ?? '';
                     <option value="">Select Role</option>
                     <option value="student">Student</option>
                     <option value="organizer">Organizer</option>
+                    <option value="multimedia">Multimedia</option>
                 </select>
             </div>
 
             <div class="input-box" id="departmentWrapper" style="display: none;">
                 <select name="department" id="departmentSelect">
                     <option value="">Select Department</option>
-                    <option value="BSIT">BSIT</option>
-                    <option value="BSHM">BSHM</option>
-                    <option value="CONAHS">CONAHS</option>
-                    <option value="Senior High">Senior High</option>
+                    <option value="High school department">High School Department</option>
+                    <option value="College of Communication, Information and Technology">College of Communication, Information and Technology</option>
+                    <option value="College of Accountancy and Business">College of Accountancy and Business</option>
+                    <option value="School of Law and Political Science">School of Law and Political Science</option>
+                    <option value="College of Education">College of Education</option>
+                    <option value="College of Nursing and Allied health sciences">College of Nursing and Allied health sciences</option>
+                    <option value="College of Hospitality Management">College of Hospitality Management</option>
                 </select>
             </div>
 
@@ -176,8 +186,28 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         };
         roleSelect.addEventListener('change', toggleDept);
-        // Initialize on load
         toggleDept();
+    }
+
+    // Caps Lock warning for password fields
+    const capsWarning = document.getElementById('capsWarning');
+    function attachCapsListener(input) {
+        if (!input || !capsWarning) return;
+        input.addEventListener('keyup', function (e) {
+            const isCaps = e.getModifierState && e.getModifierState('CapsLock');
+            capsWarning.style.display = isCaps ? 'inline-flex' : 'none';
+        });
+        input.addEventListener('blur', function () {
+            capsWarning.style.display = 'none';
+        });
+    }
+    attachCapsListener(document.getElementById('registerPassword'));
+    attachCapsListener(document.getElementById('confirmPassword'));
+
+    // When register form is shown with an error, scroll error into view (e.g. in iframe/modal)
+    const registerError = document.querySelector('.register-error');
+    if (registerError) {
+        registerError.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
 });
 </script>

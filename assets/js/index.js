@@ -3,9 +3,25 @@
 // ===============================
 let currentSection = document.querySelector('section.active');
 
+function isMobileView() {
+    return typeof window !== 'undefined' && window.innerWidth <= 768;
+}
+
 function goToSection(id) {
     const nextSection = document.getElementById(id);
     if (!nextSection) return;
+
+    // On mobile: sections stack; scroll to the section
+    if (isMobileView()) {
+        nextSection.classList.add('active');
+        if (currentSection && currentSection !== nextSection) {
+            currentSection.classList.remove('active');
+        }
+        currentSection = nextSection;
+        nextSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+    }
+
     if (currentSection === nextSection) return;
 
     // Exit current section
@@ -30,6 +46,39 @@ function goToSection(id) {
     // Smooth scroll to top
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
+
+// ===============================
+// MOBILE MENU
+// ===============================
+function closeMobileNav() {
+    const nav = document.getElementById('mobileNav');
+    const btn = document.getElementById('hamburgerBtn');
+    const overlay = document.getElementById('mobileNavOverlay');
+    if (nav) nav.classList.remove('open');
+    if (btn) btn.classList.remove('active');
+    if (overlay) overlay.classList.remove('show');
+    document.body.classList.remove('mobile-menu-open');
+    document.body.style.overflow = '';
+}
+
+function toggleMobileNav() {
+    const nav = document.getElementById('mobileNav');
+    const btn = document.getElementById('hamburgerBtn');
+    const overlay = document.getElementById('mobileNavOverlay');
+    if (!nav || !btn) return;
+    const isOpen = nav.classList.toggle('open');
+    btn.classList.toggle('active', isOpen);
+    if (overlay) overlay.classList.toggle('show', isOpen);
+    document.body.classList.toggle('mobile-menu-open', isOpen);
+    document.body.style.overflow = '';
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    const hamburgerBtn = document.getElementById('hamburgerBtn');
+    if (hamburgerBtn) {
+        hamburgerBtn.addEventListener('click', toggleMobileNav);
+    }
+});
 
 // ===============================
 // MODAL LOGIC
