@@ -5,9 +5,11 @@ session_start();
 include __DIR__ . '/config/db.php';
 include __DIR__ . '/config/config.php';
 
-// Only allow logged-in students
-if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'student') {
-    header("Location: " . BASE_URL . "/views/login.php?error=Access denied");
+// Allow logged-in users (student / multimedia / organizer) to view upcoming events
+$role = $_SESSION['role'] ?? '';
+$allowedRoles = ['student', 'multimedia', 'organizer', 'admin', 'super_admin'];
+if (!isset($_SESSION['user_id']) || !in_array($role, $allowedRoles, true)) {
+    header("Location: " . BASE_URL . "/views/login.php?error=" . urlencode("Access denied"));
     exit();
 }
 
@@ -28,10 +30,36 @@ $department = $user['department'] ?? null;
 $events     = [];
 $msg        = $_GET['msg'] ?? '';
 
+// Back link based on role
+$backUrl = BASE_URL . "/index.php";
+$backLabel = "Back";
+switch ($role) {
+    case 'student':
+        $backUrl = BASE_URL . "/backend/auth/dashboard_student.php";
+        $backLabel = "Back to Dashboard";
+        break;
+    case 'multimedia':
+        $backUrl = BASE_URL . "/backend/auth/dashboard_multimedia.php";
+        $backLabel = "Back to Dashboard";
+        break;
+    case 'organizer':
+        $backUrl = BASE_URL . "/backend/auth/dashboardorganizer.php";
+        $backLabel = "Back to Dashboard";
+        break;
+    case 'admin':
+        $backUrl = BASE_URL . "/backend/admin/dashboard.php";
+        $backLabel = "Back to Dashboard";
+        break;
+    case 'super_admin':
+        $backUrl = BASE_URL . "/backend/super_admin/dashboardsuperadmin.php";
+        $backLabel = "Back to Dashboard";
+        break;
+}
+
 // Get today's date (for filtering upcoming events only)
 $today = date('Y-m-d');
 
-// Fetch upcoming events filtered by student's department
+// Fetch upcoming events filtered by user's department (if set)
 if ($department) {
     $stmt2 = $conn->prepare("SELECT * FROM events WHERE status = 'active' AND date >= ? AND (department = ? OR department = 'ALL') ORDER BY date ASC");
     $stmt2->bind_param("ss", $today, $department);
@@ -312,14 +340,14 @@ $conn->close();
     <!-- Top Navigation -->
     <nav class="top-navbar">
         <div class="navbar-left">
-            <a href="<?= BASE_URL ?>/backend/auth/dashboard_student.php" class="brand-logo">
+            <a href="<?= htmlspecialchars($backUrl) ?>" class="brand-logo">
                 <i class="fas fa-calendar-alt"></i>
                 <span>EVENTIFY</span>
             </a>
         </div>
         <div class="navbar-right">
-            <a href="<?= BASE_URL ?>/backend/auth/dashboard_student.php" class="back-link">
-                <i class="fas fa-arrow-left"></i> Back to Dashboard
+            <a href="<?= htmlspecialchars($backUrl) ?>" class="back-link">
+                <i class="fas fa-arrow-left"></i> <?= htmlspecialchars($backLabel) ?>
             </a>
         </div>
     </nav>
@@ -328,7 +356,13 @@ $conn->close();
     <div class="container-main">
         <div class="page-header">
             <h1><i class="fas fa-calendar-check"></i> Upcoming Events</h1>
-            <p>View all upcoming events for your department</p>
+            <p>
+                <?php if ($department): ?>
+                    View all upcoming events for your department.
+                <?php else: ?>
+                    View all upcoming events.
+                <?php endif; ?>
+            </p>
         </div>
 
         <?php if ($msg): ?>

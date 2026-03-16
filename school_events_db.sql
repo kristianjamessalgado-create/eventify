@@ -47,11 +47,22 @@ CREATE TABLE `events` (
   `title` varchar(150) NOT NULL,
   `description` text DEFAULT NULL,
   `date` date DEFAULT NULL,
+  -- optional separate time fields to support hourly events
+  `start_time` time DEFAULT NULL,
+  `end_time` time DEFAULT NULL,
   `location` varchar(100) DEFAULT NULL,
   `organizer_id` int(11) NOT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `status` enum('active','closed') DEFAULT 'active',
-  `department` enum('ALL','BSIT','BSHM','CONAHS','Senior High') NOT NULL DEFAULT 'ALL'
+  -- status now supports an approval workflow
+  -- pending  = waiting for super admin/admin approval
+  -- active   = approved and visible to users
+  -- rejected = rejected by admin/super admin
+  -- closed   = event already finished/archived
+  `status` enum('pending','active','rejected','closed') DEFAULT 'pending',
+  `department` enum('ALL','BSIT','BSHM','CONAHS','Senior High') NOT NULL DEFAULT 'ALL',
+  `checkin_token` varchar(64) DEFAULT NULL,
+  `reject_reason` text DEFAULT NULL,
+  UNIQUE KEY `checkin_token` (`checkin_token`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -92,11 +103,27 @@ CREATE TABLE `users` (
   `name` varchar(100) NOT NULL,
   `email` varchar(100) NOT NULL,
   `password` varchar(255) NOT NULL,
-  `role` enum('super_admin','admin','organizer','student') NOT NULL,
+  `role` enum('super_admin','admin','organizer','student','multimedia') NOT NULL,
   `department` enum('BSIT','BSHM','CONAHS','Senior High') DEFAULT NULL,
   `status` enum('active','inactive') DEFAULT 'active',
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `failed_attempts` int(11) DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+--
+-- Table structure for table `activity_logs`
+--
+
+CREATE TABLE `activity_logs` (
+  `id` int(11) NOT NULL,
+  `actor_id` int(11) DEFAULT NULL,
+  `actor_role` varchar(50) DEFAULT NULL,
+  `action` varchar(100) NOT NULL,
+  `target_type` varchar(50) DEFAULT NULL,
+  `target_id` int(11) DEFAULT NULL,
+  `details` text DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -164,6 +191,13 @@ ALTER TABLE `users`
   ADD UNIQUE KEY `email` (`email`);
 
 --
+-- Indexes for table `activity_logs`
+--
+ALTER TABLE `activity_logs`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `actor_id` (`actor_id`);
+
+--
 -- AUTO_INCREMENT for dumped tables
 --
 
@@ -192,6 +226,12 @@ ALTER TABLE `users`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=26;
 
 --
+-- AUTO_INCREMENT for table `activity_logs`
+--
+ALTER TABLE `activity_logs`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
 -- Constraints for dumped tables
 --
 
@@ -214,6 +254,37 @@ ALTER TABLE `events`
 ALTER TABLE `registrations`
   ADD CONSTRAINT `registrations_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`),
   ADD CONSTRAINT `registrations_ibfk_2` FOREIGN KEY (`event_id`) REFERENCES `events` (`id`);
+
+--
+-- Table structure for table `notifications`
+--
+CREATE TABLE `notifications` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `user_id` int(11) NOT NULL,
+  `type` varchar(50) NOT NULL,
+  `title` varchar(255) NOT NULL,
+  `message` text DEFAULT NULL,
+  `event_id` int(11) DEFAULT NULL,
+  `read_at` datetime DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `user_id` (`user_id`),
+  KEY `event_id` (`event_id`),
+  KEY `read_at` (`read_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Constraints for table `notifications`
+--
+ALTER TABLE `notifications`
+  ADD CONSTRAINT `notifications_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `notifications_ibfk_2` FOREIGN KEY (`event_id`) REFERENCES `events` (`id`) ON DELETE SET NULL;
+
+--
+-- Constraints for table `activity_logs`
+--
+ALTER TABLE `activity_logs`
+  ADD CONSTRAINT `activity_logs_ibfk_1` FOREIGN KEY (`actor_id`) REFERENCES `users` (`id`) ON DELETE SET NULL;
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;

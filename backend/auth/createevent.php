@@ -2,6 +2,7 @@
 session_start();
 include __DIR__ . '/../../config/db.php';
 include __DIR__ . '/../../config/config.php';
+include __DIR__ . '/../../config/csrf.php';
 
 // Check if user is logged in as organizer
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'organizer') {
@@ -15,9 +16,15 @@ $success = '';
 
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!csrf_validate()) {
+        header("Location: " . BASE_URL . "/backend/auth/dashboardorganizer.php?msg=" . urlencode("Invalid request. Please try again."));
+        exit();
+    }
     $title = trim($_POST['title'] ?? '');
     $description = trim($_POST['description'] ?? '');
     $date = $_POST['date'] ?? '';
+    $start_time = $_POST['start_time'] ?? '';
+    $end_time = $_POST['end_time'] ?? '';
     $location = trim($_POST['location'] ?? '');
     $department = $_POST['department'] ?? 'ALL';
     
@@ -26,6 +33,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = "Title is required.";
     } elseif (empty($date)) {
         $error = "Date is required.";
+    } elseif (empty($start_time)) {
+        $error = "Start time is required.";
     } elseif (empty($location)) {
         $error = "Location is required.";
     } elseif (strlen($title) > 150) {
@@ -38,13 +47,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$dateObj || $dateObj->format('Y-m-d') !== $date) {
             $error = "Invalid date format.";
         } else {
+            // Validate time format (HH:MM)
+            $startTimeObj = DateTime::createFromFormat('H:i', $start_time);
+            if (!$startTimeObj || $startTimeObj->format('H:i') !== $start_time) {
+                $error = "Invalid start time format.";
+            }
+
+            $endTimeObj = null;
+            if ($end_time !== '') {
+                $endTimeObj = DateTime::createFromFormat('H:i', $end_time);
+                if (!$endTimeObj || $endTimeObj->format('H:i') !== $end_time) {
+                    $error = "Invalid end time format.";
+                } elseif ($endTimeObj <= $startTimeObj) {
+                    $error = "End time must be after start time.";
+                }
+            }
+
             // Check if date is in the past
             $today = new DateTime();
             $today->setTime(0, 0, 0);
             $eventDate = new DateTime($date);
             $eventDate->setTime(0, 0, 0);
             
-            if ($eventDate < $today) {
+            if (!$error && $eventDate < $today) {
                 $error = "Event date cannot be in the past.";
             } else {
                 // Validate department value (include all configured departments)
@@ -66,12 +91,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $department = 'ALL';
                 }
 
-                // Insert event into database
-                $stmt = $conn->prepare("INSERT INTO events (title, description, date, location, organizer_id, department, status) VALUES (?, ?, ?, ?, ?, ?, 'active')");
-                $stmt->bind_param("ssssis", $title, $description, $date, $location, $session_user_id, $department);
+                // Insert event into database as pending (requires admin approval); include unique token for QR check-in
+                $checkin_token = bin2hex(random_bytes(16));
+                $stmt = $conn->prepare("INSERT INTO events (title, description, date, start_time, end_time, location, organizer_id, department, status, checkin_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)");
+                $start_time_param = $start_time ?: null;
+                $end_time_param = $end_time !== '' ? $end_time : null;
+                $stmt->bind_param("ssssssiss", $title, $description, $date, $start_time_param, $end_time_param, $location, $session_user_id, $department, $checkin_token);
                 
                 if ($stmt->execute()) {
-                    $success = "Event created successfully!";
+                    $success = "Event submitted successfully and is now pending approval from the administrator.";
                     header("Location: " . BASE_URL . "/backend/auth/dashboardorganizer.php?msg=" . urlencode($success));
                     exit();
                 } else {

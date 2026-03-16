@@ -2,6 +2,7 @@
 session_start();
 include __DIR__ . '/../../config/db.php';
 include __DIR__ . '/../../config/config.php';
+include __DIR__ . '/../../config/csrf.php';
 
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'multimedia') {
     header("Location: " . BASE_URL . "/views/login.php?error=" . urlencode("Access denied"));
@@ -10,7 +11,6 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'multimedia') {
 
 $user_id = (int) $_SESSION['user_id'];
 $base_dir = dirname(__DIR__, 2); // project root
-$uploads_base = $base_dir . '/uploads/events';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif'];
@@ -22,6 +22,10 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST' || empty($_POST['event_id'])) {
     header("Location: " . BASE_URL . "/backend/auth/dashboard_multimedia.php?msg=" . urlencode("Invalid request."));
     exit();
 }
+if (!csrf_validate()) {
+    header("Location: " . BASE_URL . "/backend/auth/dashboard_multimedia.php?msg=" . urlencode("Invalid request. Please try again."));
+    exit();
+}
 
 $event_id = (int) $_POST['event_id'];
 if ($event_id <= 0) {
@@ -29,17 +33,28 @@ if ($event_id <= 0) {
     exit();
 }
 
-// Check event exists
-$stmt = $conn->prepare("SELECT id FROM events WHERE id = ?");
+// Check event exists and get department (for folder)
+$stmt = $conn->prepare("SELECT id, department FROM events WHERE id = ?");
 $stmt->bind_param("i", $event_id);
 $stmt->execute();
-$stmt->store_result();
-if ($stmt->num_rows === 0) {
+$stmt->bind_result($ev_id, $ev_department);
+if (!$stmt->fetch()) {
     $stmt->close();
     header("Location: " . BASE_URL . "/backend/auth/dashboard_multimedia.php?msg=" . urlencode("Event not found."));
     exit();
 }
 $stmt->close();
+
+// Build department-based folder: uploads/events/<department_slug>/ (ALL -> all)
+$dept = is_string($ev_department) ? trim($ev_department) : '';
+$deptFolder = ($dept === '' || strtoupper($dept) === 'ALL') ? 'all' : $dept;
+$deptFolder = strtolower($deptFolder);
+$deptFolder = preg_replace('/[^a-z0-9]+/', '_', $deptFolder);
+$deptFolder = trim($deptFolder, '_');
+if ($deptFolder === '') $deptFolder = 'all';
+
+$uploads_base = $base_dir . '/uploads/events/' . $deptFolder;
+$relative_base = 'uploads/events/' . $deptFolder . '/';
 
 // Collect uploaded files (support both single and multiple)
 $files = [];
@@ -87,7 +102,7 @@ if (empty($files)) {
     exit();
 }
 
-// Ensure the common uploads folder exists (all photos go here)
+// Ensure the department uploads folder exists
 if (!is_dir($uploads_base)) {
     if (!@mkdir($uploads_base, 0755, true)) {
         header("Location: " . BASE_URL . "/backend/auth/dashboard_multimedia.php?msg=" . urlencode("Could not create upload folder."));
@@ -97,8 +112,6 @@ if (!is_dir($uploads_base)) {
 
 $insert = $conn->prepare("INSERT INTO event_photos (event_id, uploaded_by, file_path) VALUES (?, ?, ?)");
 $uploaded = 0;
-// All files stored in a single folder: uploads/events/
-$relative_base = 'uploads/events/';
 
 foreach ($files as $f) {
     $ext = pathinfo($f['name'], PATHINFO_EXTENSION) ?: 'jpg';

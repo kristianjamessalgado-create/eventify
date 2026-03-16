@@ -10,6 +10,12 @@ $user      = $user ?? ['name' => 'Student', 'user_id' => 'N/A', 'department' => 
 $events    = $events ?? []; // always an array
 $msg       = $msg ?? '';
 $department = $user['department'] ?? null;
+$attendance_records = $attendance_records ?? [];
+$today = date('Y-m-d');
+$upcoming_events = array_values(array_filter($events ?? [], function ($e) use ($today) {
+    $d = $e['date'] ?? '';
+    return $d !== '' && $d >= $today;
+}));
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -35,6 +41,9 @@ $department = $user['department'] ?? null;
 <!-- Top Navigation Bar -->
 <nav class="top-navbar">
     <div class="navbar-left">
+        <button type="button" class="nav-btn sidebar-toggle-mobile" id="sidebarToggleMobile" aria-label="Open menu" title="Menu">
+            <i class="fas fa-bars"></i>
+        </button>
         <div class="brand-logo">
             <i class="fas fa-calendar-alt"></i>
             <span>EVENTIFY</span>
@@ -44,8 +53,21 @@ $department = $user['department'] ?? null;
         <button class="nav-btn" title="Calendar">
             <i class="fas fa-calendar"></i>
         </button>
-        <button class="nav-btn" title="Notifications">
+        <button
+            class="nav-btn position-relative"
+            title="Notifications"
+            data-bs-toggle="modal"
+            data-bs-target="#studentNotificationsModal"
+        >
             <i class="fas fa-bell"></i>
+            <?php if (!empty($upcoming_events)): ?>
+                <span
+                    class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+                    style="font-size: 0.55rem;"
+                >
+                    <?= count($upcoming_events) ?>
+                </span>
+            <?php endif; ?>
         </button>
 
         <!-- Profile dropdown -->
@@ -78,6 +100,11 @@ $department = $user['department'] ?? null;
                         <i class="fas fa-circle-question me-2"></i> Help
                     </a>
                 </li>
+                <li>
+                    <a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#studentAttendanceModal">
+                        <i class="fas fa-clipboard-check me-2"></i> My attendance
+                    </a>
+                </li>
                 <li><hr class="dropdown-divider"></li>
                 <li>
                     <a class="dropdown-item text-danger" href="#" data-bs-toggle="modal" data-bs-target="#logoutModal">
@@ -91,8 +118,10 @@ $department = $user['department'] ?? null;
 
 <!-- Main Layout -->
 <div class="dashboard-layout">
-    <!-- Left Sidebar -->
-    <aside class="sidebar">
+    <div class="sidebar-backdrop" id="sidebarBackdrop" aria-hidden="true"></div>
+    <!-- Left Sidebar (drawer on mobile) -->
+    <aside class="sidebar" id="studentSidebar">
+        <button type="button" class="sidebar-close-mobile" id="sidebarCloseMobile" aria-label="Close menu"><i class="fas fa-times"></i></button>
         <!-- User Info Card -->
         <div class="user-info-card">
             <div class="user-avatar-large">
@@ -124,10 +153,36 @@ $department = $user['department'] ?? null;
         <!-- Quick Actions -->
         <div class="quick-actions">
             <h3 class="section-title">QUICK ACTIONS</h3>
-            <a href="<?= BASE_URL ?>/upcoming_events.php" class="action-btn">
+            <button
+                type="button"
+                class="action-btn w-100 text-start border-0 bg-transparent"
+                data-bs-toggle="modal"
+                data-bs-target="#scanQRModal"
+            >
+                <i class="fas fa-qrcode"></i>
+                <span>Scan QR</span>
+            </button>
+            <button
+                type="button"
+                class="action-btn w-100 text-start border-0 bg-transparent"
+                data-bs-toggle="modal"
+                data-bs-target="#studentUpcomingEventsModal"
+            >
                 <i class="fas fa-calendar-check"></i>
                 <span>Upcoming Events</span>
-            </a>
+            </button>
+            <button
+                type="button"
+                class="action-btn w-100 text-start border-0 bg-transparent"
+                data-bs-toggle="modal"
+                data-bs-target="#studentAttendanceModal"
+            >
+                <i class="fas fa-clipboard-check"></i>
+                <span>Attendance record</span>
+                <?php if (count($attendance_records) > 0): ?>
+                    <span class="badge bg-success ms-1"><?= count($attendance_records) ?></span>
+                <?php endif; ?>
+            </button>
             <button class="action-btn" onclick="openProfileModal()">
                 <i class="fas fa-user-edit"></i>
                 <span>Edit Profile</span>
@@ -161,33 +216,13 @@ $department = $user['department'] ?? null;
             </div>
         <?php endif; ?>
 
-        <!-- Calendar Controls -->
-        <div class="calendar-controls">
-            <div class="controls-left">
-                <button class="control-nav" id="calPrev"><i class="fas fa-chevron-left"></i></button>
-                <h2 class="calendar-title" id="calendarTitle">September, 2026</h2>
-                <button class="control-nav" id="calNext"><i class="fas fa-chevron-right"></i></button>
-            </div>
-            <div class="controls-right">
-                <button class="view-btn active" data-view="dayGridMonth">Month</button>
-                <button class="view-btn" data-view="timeGridWeek">Week</button>
-                <button class="view-btn" data-view="timeGridDay">Day</button>
-                <button class="view-btn" data-view="today">Today</button>
-            </div>
-        </div>
-
-        <!-- FullCalendar Container -->
-        <div class="calendar-container">
-            <div id="student-calendar"></div>
-        </div>
-
-        <!-- Upcoming Events List -->
+        <!-- Upcoming Events List (at top for quick scan) -->
         <div class="upcoming-events-section">
             <h3 class="section-heading">Upcoming Events</h3>
-            <?php if (!empty($events)): ?>
+            <?php if (!empty($upcoming_events)): ?>
                 <div class="events-list">
-                    <?php foreach (array_slice($events, 0, 5) as $event): ?>
-                        <div class="event-item">
+                    <?php foreach (array_slice($upcoming_events, 0, 5) as $event): ?>
+                        <div class="event-item student-event-link" data-event-id="<?= isset($event['id']) ? (int)$event['id'] : '' ?>" role="button">
                             <div class="event-date-badge">
                                 <span class="event-month"><?= date('M', strtotime($event['date'])) ?></span>
                                 <span class="event-day"><?= date('d', strtotime($event['date'])) ?></span>
@@ -209,6 +244,26 @@ $department = $user['department'] ?? null;
                 <p class="no-events">No upcoming events for your department.</p>
             <?php endif; ?>
         </div>
+
+        <!-- Calendar Controls -->
+        <div class="calendar-controls">
+            <div class="controls-left">
+                <button class="control-nav" id="calPrev"><i class="fas fa-chevron-left"></i></button>
+                <h2 class="calendar-title" id="calendarTitle">September, 2026</h2>
+                <button class="control-nav" id="calNext"><i class="fas fa-chevron-right"></i></button>
+            </div>
+            <div class="controls-right">
+                <button class="view-btn active" data-view="dayGridMonth">Month</button>
+                <button class="view-btn" data-view="timeGridWeek">Week</button>
+                <button class="view-btn" data-view="timeGridDay">Day</button>
+                <button class="view-btn" data-view="today">Today</button>
+            </div>
+        </div>
+
+        <!-- FullCalendar Container -->
+        <div class="calendar-container">
+            <div id="student-calendar"></div>
+        </div>
     </main>
 </div>
 
@@ -218,6 +273,7 @@ $department = $user['department'] ?? null;
         <span class="profile-close" onclick="closeProfileModal()">&times;</span>
         <h2>My Information</h2>
         <form id="profileForm" action="<?= BASE_URL ?>/backend/auth/update_student_profile.php" method="POST" enctype="multipart/form-data" onsubmit="event.preventDefault(); confirmProfileChanges(this);">
+            <?= csrf_field() ?>
             <div class="form-group">
                 <label for="profilePictureModal">Profile Picture</label>
                 <div class="profile-picture-preview-container">
@@ -269,13 +325,39 @@ $department = $user['department'] ?? null;
 <script>
 window.BASE_URL = <?= json_encode(BASE_URL) ?>;
 window.studentEvents = <?= json_encode(array_map(function($e) {
+    $date = trim($e['date'] ?? '');
+    $startTime = isset($e['start_time']) ? trim($e['start_time']) : '';
+    $endTime = isset($e['end_time']) && $e['end_time'] !== null && $e['end_time'] !== '' ? trim($e['end_time']) : '';
+    $hasStartTime = $date !== '' && $startTime !== '';
+    $hasEndTime = $date !== '' && $endTime !== '';
+    // FullCalendar week/day views need ISO8601: date with "T" and time (e.g. 2025-03-15T09:00:00)
+    if ($hasStartTime) {
+        $start = $date . 'T' . $startTime;
+        $end = $hasEndTime ? ($date . 'T' . $endTime) : null;
+        if ($end === null) {
+            $startDt = \DateTime::createFromFormat('Y-m-d H:i:s', $date . ' ' . $startTime);
+            if (!$startDt) {
+                $startDt = \DateTime::createFromFormat('Y-m-d H:i', $date . ' ' . $startTime);
+            }
+            $end = $startDt ? $startDt->modify('+1 hour')->format('Y-m-d\TH:i:s') : ($date . 'T23:59:59');
+        }
+        $allDay = false;
+    } else {
+        $start = $date;
+        $end = $date;
+        $allDay = true;
+    }
     return [
-        'id'    => $e['id'] ?? null,
-        'title' => $e['title'] ?? 'Untitled',
-        'start' => $e['date'] ?? null,
+        'id'     => $e['id'] ?? null,
+        'title'  => $e['title'] ?? 'Untitled',
+        'start'  => $start,
+        'end'    => $end,
+        'allDay' => $allDay,
         'extendedProps' => [
             'location'    => $e['location'] ?? '',
             'description' => $e['description'] ?? '',
+            'start_time'  => $e['start_time'] ?? null,
+            'end_time'    => $e['end_time'] ?? null,
             'department'  => $e['department'] ?? 'ALL',
         ],
     ];
@@ -351,6 +433,222 @@ window.currentUser = {
   </div>
 </div>
 
+<!-- Notifications Modal -->
+<div class="modal fade" id="studentNotificationsModal" tabindex="-1" aria-labelledby="studentNotificationsModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="studentNotificationsModalLabel">
+          <i class="fas fa-bell me-2"></i>Notifications
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <?php if (!empty($upcoming_events)): ?>
+          <p class="small text-muted mb-2">
+            These are announcements and available upcoming events for you (including your department and all-department events).
+          </p>
+          <div class="list-group">
+            <?php foreach ($upcoming_events as $event): ?>
+              <div class="list-group-item list-group-item-action student-event-link" data-event-id="<?= isset($event['id']) ? (int)$event['id'] : '' ?>" role="button">
+                <div class="d-flex w-100 justify-content-between">
+                  <h6 class="mb-1">
+                    <i class="fas fa-calendar-day me-1 text-primary"></i>
+                    <?= htmlspecialchars($event['title'] ?? 'Untitled') ?>
+                  </h6>
+                  <?php if (!empty($event['date'])): ?>
+                    <small class="text-muted">
+                      <?= date('M d, Y', strtotime($event['date'])) ?>
+                    </small>
+                  <?php endif; ?>
+                </div>
+                <div class="mb-1 small text-muted">
+                  <?php if (!empty($event['location'])): ?>
+                    <i class="fas fa-map-marker-alt me-1"></i><?= htmlspecialchars($event['location']) ?>
+                  <?php endif; ?>
+                  <?php if (!empty($event['department'])): ?>
+                    <span class="badge bg-light text-dark ms-2">
+                      <?= htmlspecialchars($event['department'] === 'ALL' ? 'All Departments' : $event['department']) ?>
+                    </span>
+                  <?php endif; ?>
+                </div>
+                <?php if (!empty($event['description'])): ?>
+                  <p class="mb-1 small">
+                    <?= htmlspecialchars(mb_strimwidth($event['description'], 0, 140, '...')) ?>
+                  </p>
+                <?php endif; ?>
+              </div>
+            <?php endforeach; ?>
+          </div>
+        <?php else: ?>
+          <p class="mb-0 text-muted">You have no event announcements or available events at the moment.</p>
+        <?php endif; ?>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="studentNotificationsClearBtn">
+          <i class="fas fa-check-double me-1"></i> Clear
+        </button>
+        <button type="button" class="btn btn-outline-primary btn-sm" id="studentOpenUpcomingFromNotifBtn">
+          <i class="fas fa-external-link-alt me-1"></i> View all upcoming events
+        </button>
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Upcoming Events Modal -->
+<div class="modal fade" id="studentUpcomingEventsModal" tabindex="-1" aria-labelledby="studentUpcomingEventsModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="studentUpcomingEventsModalLabel">
+          <i class="fas fa-calendar-check me-2"></i>Upcoming Events
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <?php if (!empty($upcoming_events)): ?>
+          <div class="list-group">
+            <?php foreach ($upcoming_events as $event): ?>
+              <div class="list-group-item list-group-item-action student-event-link" data-event-id="<?= isset($event['id']) ? (int)$event['id'] : '' ?>" role="button">
+                <div class="d-flex w-100 justify-content-between">
+                  <h6 class="mb-1">
+                    <?= htmlspecialchars($event['title'] ?? 'Untitled') ?>
+                  </h6>
+                  <?php if (!empty($event['date'])): ?>
+                    <small class="text-muted">
+                      <?= date('M d, Y', strtotime($event['date'])) ?>
+                    </small>
+                  <?php endif; ?>
+                </div>
+                <div class="mb-1 small text-muted">
+                  <?php if (!empty($event['location'])): ?>
+                    <i class="fas fa-map-marker-alt me-1"></i><?= htmlspecialchars($event['location']) ?>
+                  <?php endif; ?>
+                  <?php if (!empty($event['department'])): ?>
+                    <span class="badge bg-light text-dark ms-2">
+                      <?= htmlspecialchars($event['department'] === 'ALL' ? 'All Departments' : $event['department']) ?>
+                    </span>
+                  <?php endif; ?>
+                </div>
+                <?php if (!empty($event['description'])): ?>
+                  <p class="mb-1 small">
+                    <?= htmlspecialchars(mb_strimwidth($event['description'], 0, 180, '...')) ?>
+                  </p>
+                <?php endif; ?>
+              </div>
+            <?php endforeach; ?>
+          </div>
+        <?php else: ?>
+          <p class="mb-0 text-muted">There are no upcoming events for your department right now.</p>
+        <?php endif; ?>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Scan QR for attendance -->
+<div class="modal fade" id="scanQRModal" tabindex="-1" aria-labelledby="scanQRModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="scanQRModalLabel">
+          <i class="fas fa-qrcode me-2"></i>Scan event QR for attendance
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" id="scanQRModalClose"></button>
+      </div>
+      <div class="modal-body">
+        <div id="scanQRVideoContainer" class="position-relative bg-dark rounded overflow-hidden" style="min-height: 260px;">
+          <video id="scanQRVideo" playsinline muted style="width:100%; height:auto; display:block;"></video>
+          <canvas id="scanQRCanvas" style="display:none;"></canvas>
+          <div id="scanQRPlaceholder" class="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center text-white">
+            <span><i class="fas fa-camera fa-2x mb-2 d-block"></i>Starting camera…</span>
+          </div>
+        </div>
+        <p id="scanQRStatus" class="small text-muted mt-2 mb-0">Position the event QR code within the frame.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Attendance record (proof of check-in) -->
+<div class="modal fade" id="studentAttendanceModal" tabindex="-1" aria-labelledby="studentAttendanceModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="studentAttendanceModalLabel">
+          <i class="fas fa-clipboard-check me-2"></i>My attendance
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p class="small text-muted mb-2">Events you have checked into (QR scan). This is your record of attendance.</p>
+        <?php if (!empty($attendance_records)): ?>
+          <?php
+          $total_attended = count($attendance_records);
+          $first_checkin = $attendance_records[array_key_last($attendance_records)]['time_in'] ?? null;
+          $first_year = $first_checkin ? date('Y', strtotime($first_checkin)) : null;
+          $this_year = date('Y');
+          $this_year_attended = 0;
+          foreach ($attendance_records as $rec) {
+              if (!empty($rec['time_in']) && date('Y', strtotime($rec['time_in'])) === $this_year) {
+                  $this_year_attended++;
+              }
+          }
+          ?>
+          <div class="mb-3 small">
+            <span class="badge bg-primary me-2">
+              <i class="fas fa-check me-1"></i><?= $total_attended ?> total event<?= $total_attended === 1 ? '' : 's' ?> attended
+            </span>
+            <span class="badge bg-info text-dark">
+              <i class="fas fa-calendar me-1"></i><?= $this_year_attended ?> this year
+            </span>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-hover align-middle">
+              <thead>
+                <tr>
+                  <th>Event</th>
+                  <th>Event date</th>
+                  <th>Location</th>
+                  <th>Check-in time</th>
+                </tr>
+              </thead>
+              <tbody>
+                <?php foreach ($attendance_records as $rec): ?>
+                  <tr>
+                    <td><strong><?= htmlspecialchars($rec['event_title'] ?? 'Event') ?></strong></td>
+                    <td><?= !empty($rec['event_date']) ? date('M j, Y', strtotime($rec['event_date'])) : '—' ?></td>
+                    <td class="text-muted small"><?= htmlspecialchars($rec['event_location'] ?? '—') ?></td>
+                    <td>
+                      <span class="badge bg-success">
+                        <i class="fas fa-check me-1"></i>
+                        <?= !empty($rec['time_in']) ? date('M j, Y g:i A', strtotime($rec['time_in'])) : '—' ?>
+                      </span>
+                    </td>
+                  </tr>
+                <?php endforeach; ?>
+              </tbody>
+            </table>
+          </div>
+        <?php else: ?>
+          <p class="mb-0 text-muted">You have not checked in to any event yet. Scan the event QR code at the venue to confirm your attendance.</p>
+        <?php endif; ?>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Event Details Modal -->
 <div class="modal fade" id="eventDetailsModal" tabindex="-1" aria-labelledby="eventDetailsModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
@@ -405,6 +703,8 @@ window.currentUser = {
     </div>
 </div>
 
+<!-- jsQR for QR code decoding -->
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 <!-- Dashboard Scripts -->
 <script src="<?= BASE_URL ?>/assets/js/dashboard_student.js"></script>
 
@@ -506,6 +806,51 @@ function closeProfilePicFullscreen() {
 
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') closeProfilePicFullscreen();
+});
+
+// Hide notification badge on bell after opening notifications modal
+document.addEventListener('DOMContentLoaded', function () {
+    var notifModal = document.getElementById('studentNotificationsModal');
+    var notifButton = document.querySelector('.navbar-right .nav-btn.position-relative[title="Notifications"]');
+    var clearBtn = document.getElementById('studentNotificationsClearBtn');
+    var openUpcomingFromNotifBtn = document.getElementById('studentOpenUpcomingFromNotifBtn');
+    var upcomingModal = document.getElementById('studentUpcomingEventsModal');
+
+    if (notifModal && notifButton) {
+        notifModal.addEventListener('shown.bs.modal', function () {
+            var badge = notifButton.querySelector('.badge');
+            if (badge) {
+                badge.classList.add('d-none');
+            }
+        });
+    }
+
+    if (clearBtn && notifButton && notifModal) {
+        clearBtn.addEventListener('click', function () {
+            // Hide badge
+            var badge = notifButton.querySelector('.badge');
+            if (badge) {
+                badge.classList.add('d-none');
+            }
+            // Replace list with "no notifications" text
+            var body = notifModal.querySelector('.modal-body');
+            if (body) {
+                body.innerHTML = '<p class="mb-0 text-muted">You have cleared your notifications for now.</p>';
+            }
+        });
+    }
+
+    if (openUpcomingFromNotifBtn && notifModal && upcomingModal) {
+        openUpcomingFromNotifBtn.addEventListener('click', function () {
+            var notifInstance = bootstrap.Modal.getInstance(notifModal);
+            if (notifInstance) {
+                notifInstance.hide();
+            }
+            setTimeout(function () {
+                bootstrap.Modal.getOrCreateInstance(upcomingModal).show();
+            }, 300);
+        });
+    }
 });
 </script>
 

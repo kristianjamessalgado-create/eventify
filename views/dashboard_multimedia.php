@@ -4,6 +4,15 @@ if (!isset($events)) $events = [];
 if (!isset($msg)) $msg = '';
 $user = $user ?? ['name' => $user_name, 'user_id' => 'N/A', 'department' => null, 'profile_picture' => null];
 $department = $user['department'] ?? null;
+$upcomingEvents = $upcomingEvents ?? [];
+
+$totalEvents = is_array($events) ? count($events) : 0;
+$totalPhotos = 0;
+if (is_array($events)) {
+    foreach ($events as $e) {
+        $totalPhotos += (int)($e['photo_count'] ?? 0);
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -16,6 +25,7 @@ $department = $user['department'] ?? null;
     <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/dashboard_multimedia.css">
 </head>
 <body>
+<input type="hidden" id="csrf_token_value" value="<?= htmlspecialchars(csrf_token()) ?>">
 
 <nav class="top-navbar">
     <div class="navbar-left">
@@ -45,7 +55,7 @@ $department = $user['department'] ?? null;
                     </a>
                 </li>
                 <li>
-                    <a class="dropdown-item" href="<?= BASE_URL ?>/upcoming_events.php">
+                    <a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#upcomingEventsModal">
                         <i class="fas fa-calendar-check me-2"></i> Upcoming events
                     </a>
                 </li>
@@ -82,7 +92,7 @@ $department = $user['department'] ?? null;
                 <i class="fas fa-user-edit"></i>
                 <span>Edit profile</span>
             </button>
-            <a href="<?= BASE_URL ?>/upcoming_events.php" class="action-btn">
+            <a href="#" class="action-btn" data-bs-toggle="modal" data-bs-target="#upcomingEventsModal">
                 <i class="fas fa-calendar-check"></i>
                 <span>Upcoming events</span>
             </a>
@@ -102,8 +112,53 @@ $department = $user['department'] ?? null;
 
     <main class="main-content">
         <div class="content-header">
-            <h1>Event photos</h1>
-            <p class="text-muted">Choose an event and upload photos.</p>
+            <div class="content-header-top">
+                <div>
+                    <div class="page-kicker">Multimedia</div>
+                    <h1>Event photos</h1>
+                    <p class="text-muted">Choose an event and upload photos. You can also review uploaded photos per event.</p>
+                </div>
+                <div class="header-actions">
+                    <a class="btn btn-outline-light btn-sm btn-upcoming" href="#" data-bs-toggle="modal" data-bs-target="#upcomingEventsModal">
+                        <i class="fas fa-calendar-check me-1"></i> Upcoming events
+                    </a>
+                </div>
+            </div>
+
+            <div class="stats-row">
+                <div class="stat-card">
+                    <div class="stat-icon"><i class="fas fa-calendar-alt"></i></div>
+                    <div class="stat-body">
+                        <div class="stat-label">Total events</div>
+                        <div class="stat-value"><?= (int)$totalEvents ?></div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon"><i class="fas fa-images"></i></div>
+                    <div class="stat-body">
+                        <div class="stat-label">Total photos</div>
+                        <div class="stat-value"><?= (int)$totalPhotos ?></div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon"><i class="fas fa-building"></i></div>
+                    <div class="stat-body">
+                        <div class="stat-label">Department</div>
+                        <div class="stat-value stat-value-sm"><?= $department ? htmlspecialchars($department) : 'Not set' ?></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="toolbar-row">
+                <div class="search-wrap">
+                    <i class="fas fa-search"></i>
+                    <input id="eventSearchInput" type="search" class="search-input" placeholder="Search events by title or location..." autocomplete="off">
+                </div>
+                <div class="toolbar-hint">
+                    <span class="hint-chip"><i class="fas fa-mouse-pointer"></i> Click “View photos” to open gallery</span>
+                    <span class="hint-chip"><i class="fas fa-cloud-upload-alt"></i> Upload multiple images at once</span>
+                </div>
+            </div>
         </div>
 
         <?php if ($msg): ?>
@@ -113,7 +168,7 @@ $department = $user['department'] ?? null;
             </div>
         <?php endif; ?>
 
-        <div class="events-list">
+        <div class="events-list" id="eventsList">
             <?php if (empty($events)): ?>
                 <div class="empty-state">
                     <i class="fas fa-calendar-times"></i>
@@ -121,36 +176,81 @@ $department = $user['department'] ?? null;
                 </div>
             <?php else: ?>
                 <?php foreach ($events as $ev): ?>
-                    <div class="event-card">
-                        <div class="event-info">
-                            <h3 class="event-title"><?= htmlspecialchars($ev['title']) ?></h3>
-                            <p class="event-meta">
-                                <i class="fas fa-calendar"></i> <?= date('M j, Y', strtotime($ev['date'])) ?>
-                                &nbsp;·&nbsp;
-                                <i class="fas fa-map-marker-alt"></i> <?= htmlspecialchars($ev['location']) ?>
-                            </p>
-                            <?php if (!empty($ev['photo_count'])): ?>
-                                <span class="photo-badge">
-                                    <i class="fas fa-images"></i> <?= (int)$ev['photo_count'] ?> photo(s)
-                                </span>
+                    <?php
+                        $eid = (int)($ev['id'] ?? 0);
+                        $title = (string)($ev['title'] ?? '');
+                        $location = (string)($ev['location'] ?? '');
+                        $myCount = (int)($ev['my_photo_count'] ?? 0);
+                        $previewPath = null;
+                        if (!empty($photosByEvent) && isset($photosByEvent[$eid]) && !empty($photosByEvent[$eid][0]['file_path'])) {
+                            $previewPath = $photosByEvent[$eid][0]['file_path'];
+                        }
+                    ?>
+                    <div class="event-card"
+                         data-title="<?= htmlspecialchars($title) ?>"
+                         data-location="<?= htmlspecialchars($location) ?>">
+                        <div class="event-media">
+                            <?php if ($previewPath): ?>
+                                <img
+                                    src="<?= BASE_URL ?>/<?= htmlspecialchars($previewPath) ?>"
+                                    alt="Preview photo for <?= htmlspecialchars($title) ?>"
+                                    class="event-preview"
+                                    loading="lazy"
+                                    decoding="async"
+                                >
+                            <?php else: ?>
+                                <div class="event-preview-placeholder" aria-hidden="true">
+                                    <i class="fas fa-image"></i>
+                                </div>
                             <?php endif; ?>
                         </div>
+
+                        <div class="event-info">
+                            <div class="event-title-row">
+                                <h3 class="event-title"><?= htmlspecialchars($title) ?></h3>
+                                <?php if (!empty($ev['department'])): ?>
+                                    <span class="dept-pill"><?= htmlspecialchars($ev['department']) ?></span>
+                                <?php endif; ?>
+                            </div>
+
+                            <p class="event-meta">
+                                <span><i class="fas fa-calendar"></i> <?= date('M j, Y', strtotime($ev['date'])) ?></span>
+                                <span class="dot">·</span>
+                                <span><i class="fas fa-map-marker-alt"></i> <?= htmlspecialchars($location) ?></span>
+                            </p>
+
+                            <div class="event-badges">
+                                <span class="photo-badge">
+                                    <i class="fas fa-images"></i> <?= (int)($ev['photo_count'] ?? 0) ?> photo(s)
+                                </span>
+                            </div>
+                        </div>
+
                         <div class="event-actions">
-                            <button type="button" class="btn btn-upload" data-bs-toggle="modal" data-bs-target="#uploadModal"
-                                    data-event-id="<?= (int)$ev['id'] ?>"
-                                    data-event-title="<?= htmlspecialchars($ev['title']) ?>">
-                                <i class="fas fa-cloud-upload-alt"></i> Upload photos
+                            <button type="button" class="btn btn-upload" onclick="openUploadModal(this); return false;"
+                                    data-event-id="<?= $eid ?>"
+                                    data-event-title="<?= htmlspecialchars($title) ?>">
+                                <i class="fas fa-cloud-upload-alt"></i> Upload
                             </button>
-                            <?php if (!empty($ev['photo_count'])): ?>
-                                <button type="button"
-                                        class="btn btn-outline-secondary btn-gallery"
-                                        data-bs-toggle="modal"
-                                        data-bs-target="#galleryModal"
-                                        data-event-id="<?= (int)$ev['id'] ?>"
-                                        data-event-title="<?= htmlspecialchars($ev['title']) ?>">
-                                    <i class="fas fa-folder-open"></i> View photos
-                                </button>
-                            <?php endif; ?>
+                            <button type="button"
+                                    class="btn btn-outline-secondary btn-gallery <?= empty($ev['photo_count']) ? 'disabled' : '' ?>"
+                                    <?= empty($ev['photo_count']) ? 'disabled aria-disabled="true"' : '' ?>
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#galleryModal"
+                                    data-event-id="<?= $eid ?>"
+                                    data-event-title="<?= htmlspecialchars($title) ?>">
+                                <i class="fas fa-folder-open"></i> View
+                            </button>
+                            <button type="button"
+                                    class="btn btn-outline-danger btn-delete-photos <?= $myCount <= 0 ? 'disabled' : '' ?>"
+                                    <?= $myCount <= 0 ? 'disabled aria-disabled="true"' : '' ?>
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#deleteEventPhotosModal"
+                                    data-event-id="<?= $eid ?>"
+                                    data-event-title="<?= htmlspecialchars($title) ?>"
+                                    data-my-count="<?= (int)$myCount ?>">
+                                <i class="fas fa-trash-alt"></i> Delete
+                            </button>
                         </div>
                     </div>
                 <?php endforeach; ?>
@@ -159,12 +259,66 @@ $department = $user['department'] ?? null;
     </main>
 </div>
 
+<!-- Upcoming Events Modal (for multimedia) -->
+<div class="modal fade" id="upcomingEventsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-calendar-check me-2"></i>Upcoming events</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <?php if (empty($upcomingEvents)): ?>
+                    <div class="mm-upcoming-empty">
+                        <i class="fas fa-calendar-times"></i>
+                        <div>
+                            <div class="fw-semibold">No upcoming events</div>
+                            <div class="text-muted small">Once organizers create active events, they will appear here.</div>
+                        </div>
+                    </div>
+                <?php else: ?>
+                    <div class="mm-upcoming-list">
+                        <?php foreach ($upcomingEvents as $ev): ?>
+                            <div class="mm-upcoming-item">
+                                <div class="mm-upcoming-date">
+                                    <div class="m"><?= date('M', strtotime($ev['date'])) ?></div>
+                                    <div class="d"><?= date('d', strtotime($ev['date'])) ?></div>
+                                </div>
+                                <div class="mm-upcoming-info">
+                                    <div class="mm-upcoming-title"><?= htmlspecialchars($ev['title'] ?? 'Untitled') ?></div>
+                                    <div class="mm-upcoming-meta">
+                                        <span><i class="fas fa-map-marker-alt"></i> <?= htmlspecialchars($ev['location'] ?? 'TBA') ?></span>
+                                        <span class="dot">·</span>
+                                        <span class="pill"><?= htmlspecialchars(($ev['department'] ?? 'ALL') === 'ALL' ? 'All Departments' : ($ev['department'] ?? '')) ?></span>
+                                    </div>
+                                    <?php if (!empty($ev['description'])): ?>
+                                        <div class="mm-upcoming-desc">
+                                            <?= htmlspecialchars(mb_strimwidth($ev['description'], 0, 140, '...')) ?>
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+            </div>
+            <div class="modal-footer justify-content-between">
+                <a class="btn btn-outline-secondary" href="<?= BASE_URL ?>/upcoming_events.php">
+                    <i class="fas fa-up-right-from-square me-1"></i> Open full page
+                </a>
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Done</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Profile Modal (Multimedia) -->
 <div id="mmProfileModal" class="profile-modal">
     <div class="profile-modal-content">
         <span class="profile-close" onclick="closeMmProfileModal()">&times;</span>
         <h2>My Information</h2>
         <form id="mmProfileForm" action="<?= BASE_URL ?>/backend/auth/update_multimedia_profile.php" method="POST" enctype="multipart/form-data" onsubmit="event.preventDefault(); confirmMmProfileChanges(this);">
+            <?= csrf_field() ?>
             <div class="form-group">
                 <label for="mmProfilePicture">Profile Picture</label>
                 <div class="profile-picture-preview-container">
@@ -200,12 +354,17 @@ $department = $user['department'] ?? null;
 
             <div class="form-group">
                 <label>Multimedia Club</label>
-                <input
-                    type="text"
-                    value="<?= $department ? htmlspecialchars($department . ' Multimedia') : 'Not assigned' ?>"
-                    readonly
-                >
-                <small class="text-muted d-block mt-1">Each department has its own multimedia club. This is based on your department.</small>
+                <select name="department" id="mmDepartment">
+                    <option value="" <?= empty($department) ? 'selected' : '' ?>>Select Department</option>
+                    <option value="High school department" <?= ($department === 'High school department') ? 'selected' : '' ?>>High School Department</option>
+                    <option value="College of Communication, Information and Technology" <?= ($department === 'College of Communication, Information and Technology') ? 'selected' : '' ?>>College of Communication, Information and Technology</option>
+                    <option value="College of Accountancy and Business" <?= ($department === 'College of Accountancy and Business') ? 'selected' : '' ?>>College of Accountancy and Business</option>
+                    <option value="School of Law and Political Science" <?= ($department === 'School of Law and Political Science') ? 'selected' : '' ?>>School of Law and Political Science</option>
+                    <option value="College of Education" <?= ($department === 'College of Education') ? 'selected' : '' ?>>College of Education</option>
+                    <option value="College of Nursing and Allied health sciences" <?= ($department === 'College of Nursing and Allied health sciences') ? 'selected' : '' ?>>College of Nursing and Allied health sciences</option>
+                    <option value="College of Hospitality Management" <?= ($department === 'College of Hospitality Management') ? 'selected' : '' ?>>College of Hospitality Management</option>
+                </select>
+                <small class="text-muted d-block mt-1">Choose your department so your multimedia club is set correctly.</small>
             </div>
 
             <button type="submit" class="btn btn-primary w-100">Save Info</button>
@@ -250,6 +409,7 @@ $department = $user['department'] ?? null;
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form action="<?= BASE_URL ?>/backend/auth/upload_event_photo.php" method="POST" enctype="multipart/form-data">
+                <?= csrf_field() ?>
                 <input type="hidden" name="event_id" id="uploadEventId" value="">
                 <div class="modal-body">
                     <p class="mb-3 text-muted" id="uploadEventTitle"></p>
@@ -316,6 +476,34 @@ $department = $user['department'] ?? null;
     </div>
 </div>
 
+<!-- Delete Event Photos (My uploads) Confirmation Modal -->
+<div class="modal fade" id="deleteEventPhotosModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-trash-alt me-2"></i>Delete your photos</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="<?= BASE_URL ?>/backend/auth/delete_my_event_photos.php">
+                <?= csrf_field() ?>
+                <input type="hidden" name="event_id" id="deleteEventPhotosEventId" value="">
+                <div class="modal-body">
+                    <p class="mb-0" id="deleteEventPhotosMessage"></p>
+                    <small class="text-muted d-block mt-2">
+                        This will delete only the photos you uploaded for this event.
+                    </small>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-trash-alt me-1"></i> Yes, Delete
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <!-- Photo Viewer Lightbox (Facebook-style) -->
 <div class="photo-viewer" id="photoViewer" style="display:none;">
     <div class="photo-viewer-overlay" onclick="closePhotoViewer()"></div>
@@ -338,6 +526,62 @@ $department = $user['department'] ?? null;
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
+// Upload modal helper:
+// - Uses Bootstrap modal if available
+// - Falls back to a simple modal display if Bootstrap JS isn't loaded (e.g., offline)
+function showModalFallback(modalEl) {
+    if (!modalEl) return;
+    modalEl.style.display = 'block';
+    modalEl.classList.add('show');
+    modalEl.removeAttribute('aria-hidden');
+    modalEl.setAttribute('aria-modal', 'true');
+    modalEl.setAttribute('role', 'dialog');
+    document.body.style.overflow = 'hidden';
+    document.body.classList.add('modal-open');
+
+    var backdrop = document.createElement('div');
+    backdrop.className = 'modal-backdrop fade show';
+    backdrop.setAttribute('data-fallback', '1');
+    document.body.appendChild(backdrop);
+    backdrop.addEventListener('click', function() { hideModalFallback(modalEl); });
+
+    var dismissers = modalEl.querySelectorAll('[data-bs-dismiss="modal"]');
+    for (var i = 0; i < dismissers.length; i++) {
+        dismissers[i].addEventListener('click', function() { hideModalFallback(modalEl); }, { once: true });
+    }
+}
+
+function hideModalFallback(modalEl) {
+    if (!modalEl) return;
+    modalEl.classList.remove('show');
+    modalEl.style.display = 'none';
+    modalEl.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+    document.body.classList.remove('modal-open');
+    var backdrops = document.querySelectorAll('.modal-backdrop[data-fallback="1"]');
+    for (var i = 0; i < backdrops.length; i++) backdrops[i].remove();
+}
+
+function openUploadModal(btn) {
+    var modalEl = document.getElementById('uploadModal');
+    if (!modalEl || !btn) return;
+
+    var eid = btn.dataset.eventId || '';
+    var title = btn.dataset.eventTitle || '';
+    var idEl = document.getElementById('uploadEventId');
+    var titleEl = document.getElementById('uploadEventTitle');
+    var photosEl = document.getElementById('photosInput');
+    if (idEl) idEl.value = eid;
+    if (titleEl) titleEl.textContent = 'Event: ' + title;
+    if (photosEl) photosEl.value = '';
+
+    if (window.bootstrap && bootstrap.Modal) {
+        new bootstrap.Modal(modalEl).show();
+    } else {
+        showModalFallback(modalEl);
+    }
+}
+
 // Profile modal (multimedia)
 function openMmProfileModal() {
     var el = document.getElementById('mmProfileModal');
@@ -425,15 +669,34 @@ document.addEventListener('keydown', function(e) {
 window.photosByEvent = <?= json_encode($photosByEvent ?? [], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
 
 document.addEventListener('DOMContentLoaded', function() {
-    var uploadModal = document.getElementById('uploadModal');
-    if (uploadModal) {
-        uploadModal.addEventListener('show.bs.modal', function(e) {
+    // Client-side search filter (title + location)
+    var searchInput = document.getElementById('eventSearchInput');
+    var list = document.getElementById('eventsList');
+    if (searchInput && list) {
+        searchInput.addEventListener('input', function() {
+            var q = (searchInput.value || '').trim().toLowerCase();
+            var cards = list.querySelectorAll('.event-card');
+            cards.forEach(function(card) {
+                var t = (card.getAttribute('data-title') || '').toLowerCase();
+                var loc = (card.getAttribute('data-location') || '').toLowerCase();
+                var ok = !q || t.includes(q) || loc.includes(q);
+                card.style.display = ok ? '' : 'none';
+            });
+        });
+    }
+
+    var deleteEventPhotosModal = document.getElementById('deleteEventPhotosModal');
+    if (deleteEventPhotosModal) {
+        deleteEventPhotosModal.addEventListener('show.bs.modal', function(e) {
             var btn = e.relatedTarget;
-            if (btn && btn.dataset.eventId) {
-                document.getElementById('uploadEventId').value = btn.dataset.eventId;
-                document.getElementById('uploadEventTitle').textContent = 'Event: ' + (btn.dataset.eventTitle || '');
-                document.getElementById('photosInput').value = '';
-            }
+            var idEl = document.getElementById('deleteEventPhotosEventId');
+            var msgEl = document.getElementById('deleteEventPhotosMessage');
+            if (!btn || !idEl || !msgEl) return;
+            var eventId = btn.dataset.eventId || '';
+            var title = btn.dataset.eventTitle || '';
+            var count = parseInt(btn.dataset.myCount || '0', 10) || 0;
+            idEl.value = eventId;
+            msgEl.textContent = 'Delete ' + count + ' of your photo(s) from "' + title + '"? This cannot be undone.';
         });
     }
 
@@ -504,8 +767,16 @@ document.addEventListener('DOMContentLoaded', function() {
                         modal.show();
                     };
 
+                    var csrfEl = document.getElementById('csrf_token_value');
                     form.appendChild(inputId);
                     form.appendChild(inputEvent);
+                    if (csrfEl) {
+                        var inputCsrf = document.createElement('input');
+                        inputCsrf.type = 'hidden';
+                        inputCsrf.name = 'csrf_token';
+                        inputCsrf.value = csrfEl.value;
+                        form.appendChild(inputCsrf);
+                    }
                     form.appendChild(btn);
 
                     wrapper.appendChild(img);

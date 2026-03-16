@@ -38,6 +38,12 @@ body, html {
 .navbar-left {
     display: flex;
     align-items: center;
+    gap: 8px;
+}
+
+/* Menu button for mobile sidebar - hidden on desktop */
+.sidebar-toggle-mobile {
+    display: none;
 }
 
 .brand-logo {
@@ -149,6 +155,11 @@ body, html {
     display: flex;
     flex-direction: column;
     gap: 24px;
+    flex-shrink: 0;
+}
+
+.sidebar-close-mobile {
+    display: none;
 }
 
 /* User Info Card */
@@ -596,6 +607,13 @@ body, html {
     line-height: 1.4 !important;
 }
 
+/* Mobile: event title glides left (marquee) so long text is readable on small screens */
+@keyframes fc-event-title-glide {
+    0%, 12% { transform: translateX(0); }
+    88% { transform: translateX(-100%); }
+    100% { transform: translateX(0); }
+}
+
 /* Event Colors by Department */
 .fc-event[data-dept="ALL"] {
     background-color: #7c3aed !important;
@@ -934,17 +952,97 @@ body, html {
     }
 }
 
+/* Backdrop for mobile sidebar drawer - hidden on desktop */
+.sidebar-backdrop {
+    display: none;
+}
+
 @media (max-width: 768px) {
+    .top-navbar {
+        padding: 0 16px;
+    }
+
+    .sidebar-toggle-mobile {
+        display: flex;
+    }
+
     .dashboard-layout {
-        flex-direction: column;
+        flex-direction: row;
+        height: auto;
+        min-height: calc(100vh - 64px);
+        overflow: visible;
+        position: relative;
+    }
+
+    .sidebar-backdrop {
+        display: block;
+        position: fixed;
+        inset: 0;
+        top: 64px;
+        background: rgba(0, 0, 0, 0.4);
+        z-index: 1040;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.25s ease, visibility 0.25s ease;
+        pointer-events: none;
+    }
+
+    body.student-sidebar-open .sidebar-backdrop {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+    }
+
+    body.student-sidebar-open {
+        overflow: hidden;
     }
 
     .sidebar {
-        width: 100%;
-        height: auto;
-        max-height: 400px;
-        border-right: none;
-        border-bottom: 1px solid #e5e7eb;
+        position: fixed;
+        top: 64px;
+        left: 0;
+        bottom: 0;
+        width: min(320px, 85vw);
+        max-width: 320px;
+        z-index: 1050;
+        transform: translateX(-100%);
+        transition: transform 0.25s ease;
+        border-right: 1px solid #e5e7eb;
+        box-shadow: 4px 0 24px rgba(0, 0, 0, 0.15);
+        padding-top: 52px;
+    }
+
+    body.student-sidebar-open .sidebar {
+        transform: translateX(0);
+    }
+
+    .sidebar-close-mobile {
+        display: flex;
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        width: 40px;
+        height: 40px;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        background: #f3f4f6;
+        border-radius: 8px;
+        color: #6b7280;
+        cursor: pointer;
+        font-size: 1.1rem;
+        transition: background 0.2s, color 0.2s;
+    }
+
+    .sidebar-close-mobile:hover {
+        background: #e5e7eb;
+        color: #1f2937;
+    }
+
+    .main-content {
+        box-shadow: none;
+        flex: 1;
+        min-width: 0;
     }
 
     .calendar-controls {
@@ -961,6 +1059,51 @@ body, html {
     .view-btn {
         flex: 1;
         min-width: 80px;
+    }
+
+    .calendar-container {
+        padding: 16px;
+    }
+
+    .fc-daygrid-day-frame {
+        min-height: 100px !important;
+    }
+
+    /* Calendar event text: glide left like marquee on small screens */
+    .fc-event {
+        overflow: hidden !important;
+        max-width: 100% !important;
+        min-height: 1.8em !important;
+        line-height: 1.4 !important;
+    }
+
+    .fc-event .fc-event-main,
+    .fc-event .fc-event-main-frame,
+    .fc-event .fc-event-title-container {
+        overflow: hidden !important;
+        min-width: 0 !important;
+        width: 100% !important;
+    }
+
+    .fc-event .fc-event-title {
+        display: inline-block !important;
+        white-space: nowrap !important;
+        width: max-content !important;
+        min-width: max-content !important;
+        max-width: none !important;
+        padding-right: 2em !important;
+        text-overflow: clip !important;
+        overflow: visible !important;
+        animation: fc-event-title-glide 8s linear infinite !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        color: inherit !important;
+        line-height: 1.4 !important;
+    }
+
+    .fc-event:hover .fc-event-title,
+    .fc-event:focus-within .fc-event-title {
+        animation-play-state: paused !important;
     }
 
     .upcoming-events-section {

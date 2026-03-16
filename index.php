@@ -2,7 +2,14 @@
 session_start();
 if (!defined('BASE_URL')) define('BASE_URL','/school_events');
 
+$checkin_token = trim($_GET['t'] ?? '');
+
 if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
+    // Logged-in student with check-in token: send straight to check-in
+    if ($_SESSION['role'] === 'student' && $checkin_token !== '') {
+        header("Location: " . BASE_URL . "/checkin.php?t=" . urlencode($checkin_token));
+        exit();
+    }
     switch ($_SESSION['role']) {
         case 'super_admin':
             header("Location: " . BASE_URL . "/backend/super_admin/dashboardsuperadmin.php");
@@ -20,6 +27,15 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
             header("Location: " . BASE_URL . "/backend/auth/dashboard_multimedia.php");
             exit();
     }
+}
+
+// Build login iframe URL: if we have a check-in token, pass redirect so after login they go to check-in
+$login_src = BASE_URL . '/views/login.php';
+if ($checkin_token !== '') {
+    $scheme = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? 'https' : 'http';
+    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    $checkin_redirect = $scheme . '://' . $host . BASE_URL . '/checkin.php?t=' . urlencode($checkin_token);
+    $login_src .= '?redirect=' . urlencode($checkin_redirect);
 }
 ?>
 <!DOCTYPE html>
@@ -50,7 +66,7 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
         <a onclick="goToSection('features')">Features</a>
         <a onclick="goToSection('roles')">Roles</a>
         <a onclick="goToSection('faq')">FAQ</a>
-        <a onclick="openLoginModal()" class="btn">Get Started</a>
+        <a href="<?= htmlspecialchars($login_src) ?>" class="btn login-trigger" id="navGetStarted">Get Started</a>
     </nav>
     <div class="mobile-nav-overlay" id="mobileNavOverlay" onclick="closeMobileNav()" aria-hidden="true"></div>
     <nav class="mobile-nav" id="mobileNav">
@@ -59,12 +75,17 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
         <a onclick="goToSection('features'); closeMobileNav();">Features</a>
         <a onclick="goToSection('roles'); closeMobileNav();">Roles</a>
         <a onclick="goToSection('faq'); closeMobileNav();">FAQ</a>
-        <a onclick="openLoginModal(); closeMobileNav();" class="btn">Get Started</a>
+        <a href="<?= htmlspecialchars($login_src) ?>" onclick="closeMobileNav()" class="btn">Get Started</a>
     </nav>
 </header>
 
 <!-- Sections -->
 <section id="hero" class="active">
+    <?php if ($checkin_token !== ''): ?>
+    <p class="hero-checkin-notice" style="background: rgba(102, 126, 234, 0.2); color: #c7d2fe; padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 1rem; font-size: 0.95rem;">
+        <strong>Event check-in.</strong> Log in with your student account to confirm your attendance.
+    </p>
+    <?php endif; ?>
     <h1>Plan and track every school event in one place.</h1>
     <p>
         EVENTIFY is a web & app-based school events monitoring system that helps
@@ -72,10 +93,18 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
         activity without missing a thing.
     </p>
     <div class="hero-buttons">
-        <a class="btn" onclick="openLoginModal()">Get Started</a>
+        <a class="btn login-trigger" href="<?= htmlspecialchars($login_src) ?>" id="heroGetStarted"><?= $checkin_token !== '' ? 'Log in to check in' : 'Get Started' ?></a>
         <a class="btn btn-outline" onclick="goToSection('how-it-works')">See how it works</a>
     </div>
 </section>
+
+<!-- Login Modal (desktop only; on mobile we redirect to full login page) -->
+<div id="loginModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeLoginModal()" aria-label="Close">&times;</span>
+        <iframe src="<?= htmlspecialchars($login_src) ?>" title="Login"></iframe>
+    </div>
+</div>
 
 <section id="how-it-works">
     <h1>How EVENTIFY works</h1>
@@ -178,15 +207,6 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
         </div>
     </div>
 </section>
-
-<!-- Login Modal -->
-<div id="loginModal" class="modal">
-    <div class="modal-content">
-        <span class="close" onclick="closeLoginModal()">&times;</span>
-        <iframe src="<?= BASE_URL ?>/views/login.php"></iframe>
-    </div>
-  
-</div>
 
 <script type="module" src="https://unpkg.com/@splinetool/viewer@1.12.39/build/spline-viewer.js"></script>
 <div class="spline-wrap">

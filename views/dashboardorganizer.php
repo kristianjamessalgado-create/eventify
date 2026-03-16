@@ -32,15 +32,56 @@ $msg = $msg ?? '';
         </div>
     </div>
     <div class="navbar-right">
-        <a href="<?= BASE_URL ?>/backend/auth/createevent.php" class="nav-btn create-btn" title="Create Event">
+        <button
+            type="button"
+            class="nav-btn create-btn"
+            title="Create Event"
+            data-bs-toggle="modal"
+            data-bs-target="#createEventModal"
+        >
             <i class="fas fa-plus"></i>
-        </a>
-        <button class="nav-btn" title="Calendar">
+        </button>
+        <button class="nav-btn" type="button" title="Calendar">
             <i class="fas fa-calendar"></i>
         </button>
-        <button class="nav-btn" title="Notifications">
-            <i class="fas fa-bell"></i>
-        </button>
+        <?php $org_notifications = $organizer_notifications ?? []; ?>
+        <div class="dropdown">
+            <button class="nav-btn position-relative dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Notifications">
+                <i class="fas fa-bell"></i>
+                <?php if (count($org_notifications) > 0): ?>
+                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size: 0.55rem;"><?= count($org_notifications) ?></span>
+                <?php endif; ?>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end shadow-sm" style="min-width: 320px; max-width: 90vw;">
+                <li class="px-3 py-2 border-bottom">
+                    <strong><i class="fas fa-bell me-2"></i>Notifications</strong>
+                </li>
+                <?php if (empty($org_notifications)): ?>
+                    <li class="px-3 py-4 text-muted small text-center">No new notifications.</li>
+                <?php else: ?>
+                    <?php foreach ($org_notifications as $n): ?>
+                        <li>
+                            <a class="dropdown-item py-2 text-decoration-none" href="<?= BASE_URL ?>/backend/auth/mark_notification_read.php?id=<?= (int)$n['id'] ?>">
+                                <div class="d-flex w-100">
+                                    <span class="me-2"><?= (($n['type'] ?? '') === 'event_approved') ? '<i class="fas fa-check-circle text-success"></i>' : '<i class="fas fa-times-circle text-danger"></i>'; ?></span>
+                                    <div class="flex-grow-1 small">
+                                        <div class="fw-semibold"><?= htmlspecialchars($n['title'] ?? '') ?></div>
+                                        <?php if (!empty($n['message'])): ?>
+                                            <div class="text-muted"><?= htmlspecialchars(mb_strimwidth($n['message'], 0, 80, '...')) ?></div>
+                                        <?php endif; ?>
+                                        <div class="text-muted" style="font-size: 0.75rem;"><?= date('M j, g:i A', strtotime($n['created_at'] ?? 'now')) ?></div>
+                                    </div>
+                                </div>
+                            </a>
+                        </li>
+                        <li><hr class="dropdown-divider my-0"></li>
+                    <?php endforeach; ?>
+                    <li>
+                        <a class="dropdown-item small text-center py-2" href="<?= BASE_URL ?>/backend/auth/mark_notification_read.php?mark_all=1"><i class="fas fa-check-double me-1"></i> Mark all as read</a>
+                    </li>
+                <?php endif; ?>
+            </ul>
+        </div>
         <!-- Profile dropdown -->
         <div class="dropdown">
             <button class="profile-avatar profile-toggle dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="<?= htmlspecialchars($user_name) ?>">
@@ -171,11 +212,12 @@ $msg = $msg ?? '';
                 <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
             </div>
         <?php endif; ?>
-        <!-- Calendar Controls -->
+
+        <!-- Calendar Controls (center calendar on dashboard again) -->
         <div class="calendar-controls">
             <div class="controls-left">
                 <button class="control-nav" id="calPrev"><i class="fas fa-chevron-left"></i></button>
-                <h2 class="calendar-title" id="calendarTitle">September, 2026</h2>
+                <h2 class="calendar-title" id="calendarTitle">My Events Calendar</h2>
                 <button class="control-nav" id="calNext"><i class="fas fa-chevron-right"></i></button>
             </div>
             <div class="controls-right">
@@ -187,9 +229,11 @@ $msg = $msg ?? '';
         </div>
 
         <!-- FullCalendar Container -->
-        <div class="calendar-container">
+        <div class="calendar-container mb-4">
             <div id="calendar"></div>
         </div>
+
+        <!-- (Stats and lists removed; calendar is main focus) -->
     </main>
 </div>
 
@@ -229,8 +273,17 @@ $msg = $msg ?? '';
                     <i class="fas fa-users"></i>
                     <?= htmlspecialchars(($event['department'] ?? 'ALL') === 'ALL' ? 'All Departments' : ($event['department'] ?? 'ALL')) ?>
                   </p>
-                  <div class="event-actions">
+                  <?php
+                  $evStatus = $event['status'] ?? '';
+                  $evRejectReason = trim($event['reject_reason'] ?? '');
+                  ?>
+                  <?php if ($evStatus === 'rejected' && $evRejectReason !== ''): ?>
+                    <p class="event-meta text-danger small mb-1"><i class="fas fa-info-circle"></i> <strong>Rejection reason:</strong> <?= htmlspecialchars($evRejectReason) ?></p>
+                  <?php endif; ?>
+                  <div class="event-actions d-flex gap-1 flex-wrap">
                     <a class="btn btn-sm btn-outline-primary" href="<?= BASE_URL ?>/backend/auth/edit_event.php?id=<?= urlencode($event['id']) ?>">Edit</a>
+                    <a class="btn btn-sm btn-outline-secondary" href="<?= BASE_URL ?>/event_qr.php?id=<?= urlencode($event['id']) ?>" target="_blank" rel="noopener" title="Show QR for check-in"><i class="fas fa-qrcode"></i> QR</a>
+                    <a class="btn btn-sm btn-outline-info" href="<?= BASE_URL ?>/event_attendance.php?id=<?= urlencode($event['id']) ?>" target="_blank" rel="noopener" title="View who attended"><i class="fas fa-clipboard-check"></i> Attendance</a>
                   </div>
                 </div>
               </div>
@@ -241,9 +294,9 @@ $msg = $msg ?? '';
         <?php endif; ?>
       </div>
       <div class="modal-footer">
-        <a href="<?= BASE_URL ?>/backend/auth/createevent.php" class="btn btn-primary">
+        <button type="button" class="btn btn-primary" id="openCreateEventFromMyEvents">
           <i class="fas fa-plus"></i> Create Event
-        </a>
+        </button>
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
       </div>
     </div>
@@ -259,6 +312,7 @@ $msg = $msg ?? '';
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <form id="organizerProfileForm" action="<?= BASE_URL ?>/backend/auth/update_organizer_profile.php" method="POST" enctype="multipart/form-data" onsubmit="event.preventDefault(); confirmOrganizerProfileChanges(this);">
+        <?= csrf_field() ?>
         <div class="modal-body">
           <div class="organizer-profile-picture-container mb-3">
             <?php if (!empty($user['profile_picture'])): ?>
@@ -368,6 +422,71 @@ $msg = $msg ?? '';
   </div>
 </div>
 
+<!-- Create Event Modal -->
+<div class="modal fade" id="createEventModal" tabindex="-1" aria-labelledby="createEventModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="createEventModalLabel">
+          <i class="fas fa-calendar-plus me-2"></i>Create New Event
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form method="POST" action="<?= BASE_URL ?>/backend/auth/createevent.php">
+        <?= csrf_field() ?>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="ceTitle" class="form-label">Event Title <span class="text-danger">*</span></label>
+            <input type="text" name="title" id="ceTitle" class="form-control" maxlength="150" required>
+          </div>
+          <div class="mb-3">
+            <label for="ceDescription" class="form-label">Description</label>
+            <textarea name="description" id="ceDescription" class="form-control" rows="3" maxlength="1000"></textarea>
+          </div>
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label for="ceDate" class="form-label">Event Date <span class="text-danger">*</span></label>
+              <input type="date" name="date" id="ceDate" class="form-control" min="<?= date('Y-m-d') ?>" required>
+            </div>
+            <div class="col-md-4">
+              <label for="ceStartTime" class="form-label">Start Time <span class="text-danger">*</span></label>
+              <input type="time" name="start_time" id="ceStartTime" class="form-control" required>
+            </div>
+            <div class="col-md-4">
+              <label for="ceEndTime" class="form-label">End Time</label>
+              <input type="time" name="end_time" id="ceEndTime" class="form-control">
+              <small class="text-muted">Optional — leave blank if not fixed.</small>
+            </div>
+          </div>
+          <div class="mb-3 mt-3">
+            <label for="ceLocation" class="form-label">Location <span class="text-danger">*</span></label>
+            <input type="text" name="location" id="ceLocation" class="form-control" maxlength="100" required>
+          </div>
+          <div class="mb-3">
+            <label for="ceDepartment" class="form-label">Department / Audience <span class="text-danger">*</span></label>
+            <select id="ceDepartment" name="department" class="form-select" required>
+              <option value="ALL">All Departments</option>
+              <option value="High school department">High School Department</option>
+              <option value="College of Communication, Information and Technology">College of Communication, Information and Technology</option>
+              <option value="College of Accountancy and Business">College of Accountancy and Business</option>
+              <option value="School of Law and Political Science">School of Law and Political Science</option>
+              <option value="College of Education">College of Education</option>
+              <option value="College of Nursing and Allied health sciences">College of Nursing and Allied health sciences</option>
+              <option value="College of Hospitality Management">College of Hospitality Management</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary">
+            <i class="fas fa-check me-1"></i>Submit for approval
+          </button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 <!-- Pass PHP events to JS -->
 <script>
 window.BASE_URL = <?= json_encode(BASE_URL) ?>;
@@ -375,15 +494,22 @@ window.eventsData = <?= json_encode(array_map(function($e) use ($user_name) {
     return [
         'id'    => $e['id'],
         'title' => $e['title'],
-        'start' => $e['date'],
+        // Combine date + time so FullCalendar can show proper times
+        'start' => trim(($e['date'] ?? '') . ' ' . ($e['start_time'] ?? '')),
+        'end'   => isset($e['end_time']) && $e['end_time'] !== null
+            ? trim(($e['date'] ?? '') . ' ' . $e['end_time'])
+            : null,
         'extendedProps' => [
-            'description' => $e['description'],
-            'location'    => $e['location'],
-            'created_at'  => $e['created_at'],
-            'status'      => $e['status'],
-            'editUrl'     => 'edit_event.php?id=' . $e['id'],
-            'organizer'   => $user_name,
-            'department'  => $e['department'] ?? 'ALL',
+            'description'   => $e['description'],
+            'location'      => $e['location'],
+            'created_at'    => $e['created_at'],
+            'status'        => $e['status'],
+            'reject_reason' => $e['reject_reason'] ?? null,
+            'start_time'    => $e['start_time'] ?? null,
+            'end_time'      => $e['end_time'] ?? null,
+            'editUrl'       => 'edit_event.php?id=' . $e['id'],
+            'organizer'     => $user_name,
+            'department'    => $e['department'] ?? 'ALL',
         ],
     ];
 }, $events), JSON_HEX_TAG|JSON_HEX_APOS|JSON_HEX_QUOT|JSON_HEX_AMP); ?>;
@@ -407,6 +533,7 @@ window.currentUser = {
         <p class="mb-1"><strong>Date:</strong> <span id="eventDate"></span></p>
         <p class="mb-1"><strong>Location:</strong> <span id="eventLocation"></span></p>
         <p class="mb-1"><strong>Status:</strong> <span id="eventStatus" class="badge bg-success"></span></p>
+        <p class="mb-1" id="eventRejectReasonWrap" style="display:none;"><strong>Rejection reason:</strong> <span id="eventRejectReason" class="text-danger"></span></p>
         <p class="mb-1"><strong>Target Department:</strong> <span id="eventDepartment"></span></p>
         <p class="mb-1"><strong>Created by:</strong> <span id="eventOrganizer"></span></p>
         <p class="mt-3 mb-1"><strong>Description:</strong></p>
@@ -415,6 +542,8 @@ window.currentUser = {
       </div>
       <div class="modal-footer">
         <a href="#" id="eventEditLink" class="btn btn-primary">Edit Event</a>
+        <a href="#" id="eventQrLink" class="btn btn-outline-secondary" target="_blank" rel="noopener" style="display:none;"><i class="fas fa-qrcode me-1"></i> Show QR</a>
+        <a href="#" id="eventAttendanceLink" class="btn btn-outline-info" target="_blank" rel="noopener" style="display:none;"><i class="fas fa-clipboard-check me-1"></i> Attendance</a>
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
       </div>
     </div>
@@ -429,6 +558,27 @@ window.currentUser = {
 
 <!-- Dashboard Scripts -->
 <script src="<?= BASE_URL ?>/assets/js/dashboardorganizer.js"></script>
+
+<script>
+// Open create-event modal from "My Events" footer button
+document.addEventListener('DOMContentLoaded', function () {
+  var openFromMyEvents = document.getElementById('openCreateEventFromMyEvents');
+  var eventsModal = document.getElementById('eventsModal');
+  var createModal = document.getElementById('createEventModal');
+
+  if (openFromMyEvents && eventsModal && createModal) {
+    openFromMyEvents.addEventListener('click', function () {
+      var eventsInstance = bootstrap.Modal.getInstance(eventsModal);
+      if (eventsInstance) {
+        eventsInstance.hide();
+      }
+      setTimeout(function () {
+        bootstrap.Modal.getOrCreateInstance(createModal).show();
+      }, 300);
+    });
+  }
+});
+</script>
 
 
 </body>

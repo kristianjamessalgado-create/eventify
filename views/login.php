@@ -2,6 +2,7 @@
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
+require_once __DIR__ . '/../config/csrf.php';
 $error = $_GET['error'] ?? '';
 $success = $_GET['success'] ?? '';
 $is_register_form = isset($_GET['form']) && $_GET['form'] === 'register';
@@ -43,7 +44,11 @@ $is_register_form = isset($_GET['form']) && $_GET['form'] === 'register';
         <?php endif; ?>
 
         <form action="/school_events/backend/auth/auth.php" method="POST">
+            <?= csrf_field() ?>
             <input type="hidden" name="action" value="login">
+            <?php if (!empty($_GET['redirect'])): ?>
+                <input type="hidden" name="redirect" value="<?= htmlspecialchars($_GET['redirect']) ?>">
+            <?php endif; ?>
 
             <div class="input-box">
                 <input type="email" name="email" placeholder="Email" required>
@@ -78,6 +83,7 @@ $is_register_form = isset($_GET['form']) && $_GET['form'] === 'register';
         <?php endif; ?>
 
         <form action="/school_events/backend/auth/auth.php" method="POST">
+            <?= csrf_field() ?>
             <input type="hidden" name="action" value="register">
 
             <div class="input-box">
@@ -111,6 +117,7 @@ $is_register_form = isset($_GET['form']) && $_GET['form'] === 'register';
                     <option value="student">Student</option>
                     <option value="organizer">Organizer</option>
                     <option value="multimedia">Multimedia</option>
+                    <option value="admin">Admin</option>
                 </select>
             </div>
 

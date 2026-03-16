@@ -78,6 +78,16 @@ document.addEventListener('DOMContentLoaded', function () {
     if (hamburgerBtn) {
         hamburgerBtn.addEventListener('click', toggleMobileNav);
     }
+
+    // Login: on desktop open modal, on mobile follow link to full login page
+    document.querySelectorAll('.login-trigger').forEach(function (el) {
+        el.addEventListener('click', function (e) {
+            if (window.innerWidth > 768) {
+                e.preventDefault();
+                openLoginModal();
+            }
+        });
+    });
 });
 
 // ===============================

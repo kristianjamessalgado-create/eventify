@@ -3,6 +3,7 @@ session_start();
 
 include __DIR__ . '/../../config/db.php';
 include __DIR__ . '/../../config/config.php';
+include __DIR__ . '/../../backend/lib/activity_logger.php';
 
 // Only super admin can unlock accounts
 if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'super_admin') {
@@ -26,6 +27,14 @@ $stmt = $conn->prepare("
 ");
 $stmt->bind_param("i", $id);
 $stmt->execute();
+
+// Log activity
+$actorId   = $_SESSION['user_id'] ?? null;
+$actorRole = $_SESSION['role'] ?? null;
+$details   = "Unlocked user ID {$id} (reset failed attempts)";
+log_activity($conn, $actorId, $actorRole, 'user_unlocked', 'user', (int)$id, $details);
+
+$conn->close();
 
 header("Location: dashboardsuperadmin.php?success=Account unlocked successfully");
 exit();

@@ -2,6 +2,7 @@
 session_start();
 include __DIR__ . '/../../config/db.php';
 include __DIR__ . '/../../config/config.php';
+include __DIR__ . '/../../config/csrf.php';
 
 // Require organizer login
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'organizer') {
@@ -35,6 +36,10 @@ if (!$event) {
 
 // Handle form submission (update)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!csrf_validate()) {
+        header("Location: " . BASE_URL . "/backend/auth/dashboardorganizer.php?msg=" . urlencode("Invalid request. Please try again."));
+        exit();
+    }
     $title       = trim($_POST['title'] ?? '');
     $description = trim($_POST['description'] ?? '');
     $date        = $_POST['date'] ?? '';
@@ -370,6 +375,7 @@ $stmt->close();
             <?php endif; ?>
 
             <form method="POST" action="" id="editEventForm">
+                <?= csrf_field() ?>
                 <div class="form-group">
                     <label for="title">
                         Event Title <span class="required">*</span>

@@ -226,11 +226,19 @@ function initFullCalendar() {
             // Fill modal content
             document.getElementById('eventTitle').textContent = event.title || 'Untitled event';
 
-            // Format date
+            // Format date + time range
             let dateStr = '';
             if (event.start) {
-                const opts = { year: 'numeric', month: 'short', day: 'numeric' };
-                dateStr = event.start.toLocaleDateString(undefined, opts);
+                const dOpts = { year: 'numeric', month: 'short', day: 'numeric' };
+                dateStr = event.start.toLocaleDateString(undefined, dOpts);
+                const tOpts = { hour: 'numeric', minute: '2-digit', hour12: true };
+                const startTime = event.start.toLocaleTimeString(undefined, tOpts);
+                let range = startTime;
+                if (event.end) {
+                    const endTime = event.end.toLocaleTimeString(undefined, tOpts);
+                    range = startTime + ' – ' + endTime;
+                }
+                dateStr += ' · ' + range;
             }
             document.getElementById('eventDate').textContent = dateStr || (event.startStr || '');
 
@@ -250,7 +258,23 @@ function initFullCalendar() {
             const statusEl = document.getElementById('eventStatus');
             const status = (props.status || 'active').toLowerCase();
             statusEl.textContent = status.charAt(0).toUpperCase() + status.slice(1);
-            statusEl.className = 'badge ' + (status === 'active' ? 'bg-success' : 'bg-secondary');
+            if (status === 'active') statusEl.className = 'badge bg-success';
+            else if (status === 'rejected') statusEl.className = 'badge bg-danger';
+            else if (status === 'pending') statusEl.className = 'badge bg-warning text-dark';
+            else statusEl.className = 'badge bg-secondary';
+
+            // Rejection reason (organizer sees why event was rejected)
+            const rejectWrap = document.getElementById('eventRejectReasonWrap');
+            const rejectReasonEl = document.getElementById('eventRejectReason');
+            if (rejectWrap && rejectReasonEl) {
+                const reason = (props.reject_reason || '').trim();
+                if (status === 'rejected' && reason) {
+                    rejectReasonEl.textContent = reason;
+                    rejectWrap.style.display = 'block';
+                } else {
+                    rejectWrap.style.display = 'none';
+                }
+            }
 
             // Created at
             document.getElementById('eventCreatedAt').textContent = props.created_at || 'N/A';
@@ -262,6 +286,24 @@ function initFullCalendar() {
                 editLink.style.display = 'inline-block';
             } else {
                 editLink.style.display = 'none';
+            }
+
+            // Event QR link (check-in)
+            const qrLink = document.getElementById('eventQrLink');
+            if (qrLink && event.id) {
+                qrLink.href = BASE_URL + '/event_qr.php?id=' + event.id;
+                qrLink.style.display = 'inline-block';
+            } else if (qrLink) {
+                qrLink.style.display = 'none';
+            }
+
+            // Attendance link (view who checked in)
+            const attendanceLink = document.getElementById('eventAttendanceLink');
+            if (attendanceLink && event.id) {
+                attendanceLink.href = BASE_URL + '/event_attendance.php?id=' + event.id;
+                attendanceLink.style.display = 'inline-block';
+            } else if (attendanceLink) {
+                attendanceLink.style.display = 'none';
             }
 
             // Show modal
@@ -307,6 +349,8 @@ function initFullCalendar() {
         calendar.addEventSource(getFilteredEvents());
     };
 }
+
+// (Modal calendar removed; main calendar stays in dashboard)
 
 // ===============================
 // CALENDAR TITLE UPDATE
@@ -440,7 +484,7 @@ function confirmOrganizerProfileChanges(form) {
     const name = (form.querySelector('input[name="name"]') || {}).value || '';
     const fileInput = form.querySelector('input[name="profile_picture"]');
     const hasFile = fileInput && fileInput.files && fileInput.files.length > 0;
-    let msg = 'Update your display name' + (name ? ' to “‘ + name + ’”' : '') + '.';
+    let msg = 'Update your display name' + (name ? ` to "${name}"` : '') + '.';
     if (hasFile) msg += ' A new profile picture will be uploaded.';
     const messageEl = document.getElementById('confirmOrganizerProfileMessage');
     if (messageEl) messageEl.textContent = msg;

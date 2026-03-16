@@ -4,9 +4,11 @@ session_start();
 ini_set('display_errors', 0);
 error_reporting(E_ALL);
 
-// Include DB and config
+// Include DB, config, CSRF, and activity logger
 include __DIR__ . '/../../config/db.php';
 include __DIR__ . '/../../config/config.php'; // For BASE_URL
+include __DIR__ . '/../../config/csrf.php';
+include __DIR__ . '/../lib/activity_logger.php';
 
 // Allowed departments for students (must match form options)
 $allowedDepartments = [
@@ -22,6 +24,11 @@ $allowedDepartments = [
 // Only handle POST requests
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
+
+    if (!csrf_validate()) {
+        header("Location: " . BASE_URL . "/views/login.php?error=" . urlencode("Invalid request. Please try again.") . "&form=" . ($action === 'register' ? 'register' : 'login'));
+        exit();
+    }
 
     if ($action === 'register') {
         // --- REGISTRATION ---
@@ -40,7 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             || !preg_match('/[\W_]/', $password)
             || strlen($password) < 8) {
             $error = "Password must contain at least 1 uppercase letter, 1 special character, and be at least 8 characters long.";
-        } elseif (!in_array($role, ['student', 'organizer', 'multimedia'])) {
+        } elseif (!in_array($role, ['student', 'organizer', 'multimedia', 'admin'])) {
             $error = "Invalid role selected.";
         } elseif ($role === 'student' && empty($department)) {
             $error = "Department is required for students.";
@@ -62,10 +69,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 // Use bcrypt for password hashing (secure, salted)
                 $hashed_password = password_hash($password, PASSWORD_DEFAULT);
-                $prefix = $role === 'multimedia' ? 'MUL' : strtoupper(substr($role, 0, 3));
+                if ($role === 'multimedia') {
+                    $prefix = 'MUL';
+                } elseif ($role === 'super_admin') {
+                    $prefix = 'SA';
+                } elseif ($role === 'admin') {
+                    $prefix = 'ADM';
+                } else {
+                    $prefix = strtoupper(substr($role, 0, 3));
+                }
                 $user_id = $prefix . '-' . rand(100, 999);
-                // Multimedia accounts must be approved by admin first
-                $status = ($role === 'multimedia') ? 'inactive' : 'active';
+                // Multimedia and admin accounts must be approved by super admin first
+                $status = in_array($role, ['multimedia', 'admin'], true) ? 'inactive' : 'active';
 
                 $insert = $conn->prepare(
                     "INSERT INTO users (user_id, name, email, password, role, department, status)
@@ -74,8 +89,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $insert->bind_param("sssssss", $user_id, $name, $email, $hashed_password, $role, $department, $status);
 
                 if ($insert->execute()) {
-                    if ($role === 'multimedia') {
-                        $success = "Registration submitted. Please wait for admin approval before logging in.";
+                    if ($role === 'multimedia' || $role === 'admin') {
+                        $success = "Registration submitted. Please wait for super admin approval before logging in.";
                     } else {
                         $success = "Registration successful! You can now login.";
                     }
@@ -163,7 +178,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $_SESSION['role'] = $user['role'];
                     $_SESSION['name'] = $user['name'];
 
-                    // Decide redirect URL based on role
+                    // Log successful login
+                    $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+                    $agent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+                    $details = "Successful login from IP {$ip}" . ($agent ? " | UA: {$agent}" : '');
+                    log_activity($conn, $user['id'], $user['role'], 'login_success', 'user', $user['id'], $details);
+
+                    // Decide redirect URL based on role (students may return to check-in page)
                     $redirectUrl = '';
                     switch ($user['role']) {
                         case 'super_admin':
@@ -185,14 +206,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $error = "Invalid role";
                             break;
                     }
+                    // Only allow same-origin redirect (prevent open redirect)
+                    if ($user['role'] === 'student' && !empty($_POST['redirect'])) {
+                        $redirect = trim($_POST['redirect']);
+                        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+                        $host = $_SERVER['HTTP_HOST'] ?? '';
+                        $allowed_prefix = $scheme . '://' . $host . BASE_URL;
+                        $same_origin = (strpos($redirect, $allowed_prefix) === 0);
+                        $relative_safe = (strpos($redirect, '/') === 0 && strpos($redirect, BASE_URL) === 0);
+                        if ($same_origin || $relative_safe) {
+                            $redirectUrl = $redirect;
+                        }
+                    }
 
                     if (!empty($error)) {
                         header("Location: " . BASE_URL . "/views/login.php?error=" . urlencode($error) . "&form=login");
                         exit();
                     }
 
-                    // Break out of iframe (modal) and redirect full page
-                    // Works whether called inside iframe or directly
+                    // Use server-side redirect when we have a custom URL (e.g. check-in page) so session cookie is sent on mobile
+                    if ($user['role'] === 'student' && $redirectUrl !== '' && $redirectUrl !== (BASE_URL . "/backend/auth/dashboard_student.php")) {
+                        $loc = $redirectUrl;
+                        if (strpos($loc, 'http') !== 0) {
+                            $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+                            $host = $_SERVER['HTTP_HOST'] ?? '';
+                            $loc = $scheme . '://' . $host . (strpos($loc, '/') === 0 ? $loc : BASE_URL . '/' . $loc);
+                        }
+                        header('Location: ' . $loc);
+                        exit();
+                    }
+
+                    // Break out of iframe (modal) and redirect full page for default dashboard
                     echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Redirecting...</title></head><body>';
                     echo '<script>';
                     echo 'window.top.location.href = ' . json_encode($redirectUrl) . ';';

@@ -2,6 +2,7 @@
 session_start();
 include __DIR__ . '/../../config/db.php';
 include __DIR__ . '/../../config/config.php';
+include __DIR__ . '/../../config/csrf.php';
 
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'multimedia') {
     header("Location: " . BASE_URL . "/views/login.php?error=" . urlencode("Access denied"));
@@ -12,6 +13,10 @@ $user_id = (int) $_SESSION['user_id'];
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST' || empty($_POST['photo_id']) || empty($_POST['event_id'])) {
     header("Location: " . BASE_URL . "/backend/auth/dashboard_multimedia.php?msg=" . urlencode("Invalid delete request."));
+    exit();
+}
+if (!csrf_validate()) {
+    header("Location: " . BASE_URL . "/backend/auth/dashboard_multimedia.php?msg=" . urlencode("Invalid request. Please try again."));
     exit();
 }
 
