@@ -8,6 +8,14 @@ $users = $users ?? [];
 $logs = $logs ?? [];
 $pendingEvents = $pendingEvents ?? [];
 $allEvents = $allEvents ?? [];
+$saUserRoleLabels = $saUserRoleLabels ?? ['Super Admin', 'Admin', 'Organizer', 'Multimedia', 'Student'];
+$saUserRoleCounts = $saUserRoleCounts ?? [0,0,0,0,0];
+$saEventStatusLabels = $saEventStatusLabels ?? ['Pending', 'Active', 'Rejected', 'Closed'];
+$saEventStatusCounts = $saEventStatusCounts ?? [0,0,0,0];
+$usersPage = isset($usersPage) ? (int) $usersPage : 1;
+$usersTotalPages = isset($usersTotalPages) ? (int) $usersTotalPages : 1;
+$eventsPage = isset($eventsPage) ? (int) $eventsPage : 1;
+$eventsTotalPages = isset($eventsTotalPages) ? (int) $eventsTotalPages : 1;
 $success = $success ?? '';
 ?>
 <!DOCTYPE html>
@@ -205,6 +213,26 @@ $success = $success ?? '';
             font-size: 0.8rem;
             color: #6b7280;
         }
+        .sa-charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 1rem;
+            padding: 0 1.5rem 1.5rem;
+        }
+        .sa-chart-card {
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+            background: #fff;
+            padding: 0.9rem;
+        }
+        .sa-chart-title {
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+            color: #64748b;
+            margin-bottom: 0.5rem;
+        }
+        .sa-chart-wrap { position: relative; height: 220px; }
         .sa-card {
             background: #fff;
             border-radius: 16px;
@@ -296,6 +324,23 @@ $success = $success ?? '';
             .sa-sidebar { width: 100%; }
             .sa-card-header, .sa-table th, .sa-table td { padding: 0.75rem 1rem; }
             .sa-table { font-size: 0.85rem; }
+            .modal-dialog {
+                margin: 0.5rem;
+            }
+            .sa-stats-grid {
+                grid-template-columns: 1fr;
+                padding: 1rem;
+            }
+            .sa-charts-grid {
+                grid-template-columns: 1fr;
+                padding: 0 1rem 1rem;
+            }
+            .sa-table-wrap {
+                padding: 0 0.75rem 1rem;
+            }
+            .sa-actions {
+                gap: 0.25rem;
+            }
         }
     </style>
 </head>
@@ -438,6 +483,16 @@ $success = $success ?? '';
                         </div>
                     </div>
                 </div>
+                <div class="sa-charts-grid">
+                    <div class="sa-chart-card">
+                        <div class="sa-chart-title">Users by role</div>
+                        <div class="sa-chart-wrap"><canvas id="saUsersChart"></canvas></div>
+                    </div>
+                    <div class="sa-chart-card">
+                        <div class="sa-chart-title">Events by status</div>
+                        <div class="sa-chart-wrap"><canvas id="saEventsChart"></canvas></div>
+                    </div>
+                </div>
             </div>
         </section>
     </div>
@@ -500,6 +555,8 @@ $success = $success ?? '';
                                         $uid   = (int)$user['id'];
                                         $role  = $user['role'] ?? '';
                                         $status = $user['status'] ?? '';
+                                        $failedAttempts = (int)($user['failed_attempts'] ?? 0);
+                                        $isLockedAccount = $failedAttempts >= 5;
                                     ?>
                                     <tr
                                         data-role="<?= htmlspecialchars($role) ?>"
@@ -537,20 +594,34 @@ $success = $success ?? '';
                                         <td>
                                             <div class="d-flex flex-wrap gap-1">
                                                 <?php if ($status === 'inactive'): ?>
-                                                    <button type="button"
-                                                            class="sa-btn-react"
-                                                            data-bs-toggle="modal"
-                                                            data-bs-target="#reactivateConfirmModal"
-                                                            data-reactivate-url="reactivate_user.php?id=<?= $uid ?>">
-                                                        <i class="fas fa-user-check me-1"></i> Reactivate
-                                                    </button>
+                                                    <?php if ($isLockedAccount): ?>
+                                                        <small class="text-muted d-block mb-1">Locked account: send OTP first via Reactivate.</small>
+                                                        <button type="button"
+                                                                class="sa-btn-react"
+                                                                data-bs-toggle="modal"
+                                                                data-bs-target="#reactivateConfirmModal"
+                                                                data-user-id="<?= $uid ?>">
+                                                            <i class="fas fa-user-check me-1"></i> Reactivate
+                                                        </button>
+                                                    <?php else: ?>
+                                                        <small class="text-muted d-block mb-1">New/pending account: use Activate.</small>
+                                                        <form method="POST" action="<?= BASE_URL ?>/backend/super_admin/activate_user.php" class="d-inline" onsubmit="return confirm('Activate this pending account?');">
+                                                            <?= csrf_field() ?>
+                                                            <input type="hidden" name="id" value="<?= $uid ?>">
+                                                            <button type="submit" class="sa-btn-react">
+                                                                <i class="fas fa-user-check me-1"></i> Activate
+                                                            </button>
+                                                        </form>
+                                                    <?php endif; ?>
                                                 <?php else: ?>
                                                     <?php if ($role !== 'super_admin'): ?>
-                                                        <a href="<?= BASE_URL ?>/backend/super_admin/deactivate_user.php?id=<?= $uid ?>"
-                                                           class="btn btn-sm btn-outline-danger"
-                                                           onclick="return confirm('Deactivate this user account?');">
-                                                            <i class="fas fa-user-slash"></i>
-                                                        </a>
+                                                        <form method="POST" action="<?= BASE_URL ?>/backend/super_admin/deactivate_user.php" class="d-inline" onsubmit="return confirm('Deactivate this user account?');">
+                                                            <?= csrf_field() ?>
+                                                            <input type="hidden" name="id" value="<?= $uid ?>">
+                                                            <button type="submit" class="btn btn-sm btn-outline-danger">
+                                                                <i class="fas fa-user-slash"></i>
+                                                            </button>
+                                                        </form>
                                                     <?php endif; ?>
                                                 <?php endif; ?>
                                             </div>
@@ -559,6 +630,14 @@ $success = $success ?? '';
                                 <?php endforeach; ?>
                             </tbody>
                         </table>
+                        <div class="d-flex justify-content-between align-items-center mt-2">
+                            <small class="text-muted">Page <?= (int)$usersPage ?> of <?= (int)$usersTotalPages ?></small>
+                            <div class="btn-group btn-group-sm">
+                                <?php $prevUsersPage = max(1, $usersPage - 1); $nextUsersPage = min($usersTotalPages, $usersPage + 1); ?>
+                                <a class="btn btn-outline-secondary <?= $usersPage <= 1 ? 'disabled' : '' ?>" href="<?= BASE_URL ?>/backend/super_admin/dashboardsuperadmin.php?users_page=<?= $prevUsersPage ?>&events_page=<?= (int)$eventsPage ?>">Prev</a>
+                                <a class="btn btn-outline-secondary <?= $usersPage >= $usersTotalPages ? 'disabled' : '' ?>" href="<?= BASE_URL ?>/backend/super_admin/dashboardsuperadmin.php?users_page=<?= $nextUsersPage ?>&events_page=<?= (int)$eventsPage ?>">Next</a>
+                            </div>
+                        </div>
                     <?php endif; ?>
                 </div>
             </div>
@@ -861,6 +940,14 @@ $success = $success ?? '';
                                 <?php endforeach; ?>
                             </tbody>
                         </table>
+                        <div class="d-flex justify-content-between align-items-center mt-2">
+                            <small class="text-muted">Page <?= (int)$eventsPage ?> of <?= (int)$eventsTotalPages ?></small>
+                            <div class="btn-group btn-group-sm">
+                                <?php $prevEventsPage = max(1, $eventsPage - 1); $nextEventsPage = min($eventsTotalPages, $eventsPage + 1); ?>
+                                <a class="btn btn-outline-secondary <?= $eventsPage <= 1 ? 'disabled' : '' ?>" href="<?= BASE_URL ?>/backend/super_admin/dashboardsuperadmin.php?events_page=<?= $prevEventsPage ?>&users_page=<?= (int)$usersPage ?>">Prev</a>
+                                <a class="btn btn-outline-secondary <?= $eventsPage >= $eventsTotalPages ? 'disabled' : '' ?>" href="<?= BASE_URL ?>/backend/super_admin/dashboardsuperadmin.php?events_page=<?= $nextEventsPage ?>&users_page=<?= (int)$usersPage ?>">Next</a>
+                            </div>
+                        </div>
                     <?php endif; ?>
                 </div>
             </div>
@@ -944,7 +1031,11 @@ $success = $success ?? '';
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <a href="#" class="btn btn-success" id="reactivateConfirmBtn"><i class="fas fa-check me-1"></i> Yes, Reactivate</a>
+                <form method="POST" action="<?= BASE_URL ?>/backend/super_admin/reactivate_user.php" class="d-inline" id="reactivateConfirmForm">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="id" id="reactivateUserId" value="">
+                    <button type="submit" class="btn btn-success" id="reactivateConfirmBtn"><i class="fas fa-check me-1"></i> Yes, Reactivate</button>
+                </form>
             </div>
         </div>
     </div>
@@ -952,8 +1043,11 @@ $success = $success ?? '';
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
 window.BASE_URL = <?= json_encode(BASE_URL ?? '/school_events') ?>;
+window.saUserRoles = <?= json_encode(['labels' => $saUserRoleLabels, 'counts' => $saUserRoleCounts]) ?>;
+window.saEventStatus = <?= json_encode(['labels' => $saEventStatusLabels, 'counts' => $saEventStatusCounts]) ?>;
 window.saAllEventsJson = <?= json_encode(array_values(array_filter(array_map(function($e) {
     $date = trim($e['date'] ?? '');
     if ($date === '') return null;
@@ -979,10 +1073,31 @@ window.saAllEventsJson = <?= json_encode(array_values(array_filter(array_map(fun
 
 document.getElementById('reactivateConfirmModal').addEventListener('show.bs.modal', function(e) {
     var btn = e.relatedTarget;
-    var url = btn && btn.getAttribute ? btn.getAttribute('data-reactivate-url') : '';
-    var link = document.getElementById('reactivateConfirmBtn');
-    if (link) link.href = url || '#';
+    var userId = btn && btn.getAttribute ? btn.getAttribute('data-user-id') : '';
+    var input = document.getElementById('reactivateUserId');
+    if (input) input.value = userId || '';
 });
+
+if (typeof Chart !== 'undefined') {
+    var ur = window.saUserRoles || { labels: [], counts: [] };
+    var es = window.saEventStatus || { labels: [], counts: [] };
+    var uCtx = document.getElementById('saUsersChart');
+    if (uCtx) {
+        new Chart(uCtx, {
+            type: 'bar',
+            data: { labels: ur.labels || [], datasets: [{ data: ur.counts || [], backgroundColor: 'rgba(56,189,248,0.65)', borderColor: 'rgba(56,189,248,1)', borderWidth: 1 }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+        });
+    }
+    var eCtx = document.getElementById('saEventsChart');
+    if (eCtx) {
+        new Chart(eCtx, {
+            type: 'doughnut',
+            data: { labels: es.labels || [], datasets: [{ data: es.counts || [], backgroundColor: ['rgba(234,179,8,.85)','rgba(16,185,129,.85)','rgba(239,68,68,.85)','rgba(100,116,139,.85)'] }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+        });
+    }
+}
 
 var rejectModalEl = document.getElementById('rejectEventModal');
 if (rejectModalEl) {

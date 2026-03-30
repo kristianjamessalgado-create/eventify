@@ -1,15 +1,20 @@
 <?php
-// Ensure BASE_URL is defined
+
 if (!defined('BASE_URL')) {
     define('BASE_URL', '/school_events');
 }
 
-// Fallbacks in case the controller didn't pass data
+// Fallbacks ni if ang variables wa na set sa controller or if ang data wa na pasa
 $user_name = $user_name ?? 'Student';
 $user      = $user ?? ['name' => 'Student', 'user_id' => 'N/A', 'department' => null];
 $events    = $events ?? []; // always an array
 $msg       = $msg ?? '';
 $department = $user['department'] ?? null;
+$registered_event_ids   = $registered_event_ids ?? [];
+$reg_count_by_event     = $reg_count_by_event ?? [];
+$feedback_submitted_ids = $feedback_submitted_ids ?? [];
+$student_notifications  = $student_notifications ?? [];
+$unread_notif_count     = isset($unread_notif_count) ? (int) $unread_notif_count : 0;
 $attendance_records = $attendance_records ?? [];
 $today = date('Y-m-d');
 $upcoming_events = array_values(array_filter($events ?? [], function ($e) use ($today) {
@@ -24,21 +29,21 @@ $upcoming_events = array_values(array_filter($events ?? [], function ($e) use ($
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Student Dashboard - EVENTIFY</title>
 
-    <!-- Bootstrap CSS -->
+    
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 
-    <!-- FullCalendar CSS -->
+   
     <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet">
 
-    <!-- Font Awesome -->
+   
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
-    <!-- Custom CSS -->
+    
     <link rel="stylesheet" href="<?= BASE_URL; ?>/assets/css/dashboard_student.css">
 </head>
 <body>
 
-<!-- Top Navigation Bar -->
+
 <nav class="top-navbar">
     <div class="navbar-left">
         <button type="button" class="nav-btn sidebar-toggle-mobile" id="sidebarToggleMobile" aria-label="Open menu" title="Menu">
@@ -60,12 +65,13 @@ $upcoming_events = array_values(array_filter($events ?? [], function ($e) use ($
             data-bs-target="#studentNotificationsModal"
         >
             <i class="fas fa-bell"></i>
-            <?php if (!empty($upcoming_events)): ?>
+            <?php if ($unread_notif_count > 0): ?>
                 <span
                     class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
                     style="font-size: 0.55rem;"
+                    title="Unread notifications"
                 >
-                    <?= count($upcoming_events) ?>
+                    <?= $unread_notif_count > 99 ? '99+' : $unread_notif_count ?>
                 </span>
             <?php endif; ?>
         </button>
@@ -144,7 +150,7 @@ $upcoming_events = array_values(array_filter($events ?? [], function ($e) use ($
         <div class="mini-calendar-widget">
             <div class="mini-calendar-header">
                 <button class="mini-cal-nav" id="miniCalPrev"><i class="fas fa-chevron-left"></i></button>
-                <span class="mini-cal-month" id="miniCalMonth">September 2026</span>
+                <span class="mini-cal-month" id="miniCalMonth"><?= date('F Y') ?></span>
                 <button class="mini-cal-nav" id="miniCalNext"><i class="fas fa-chevron-right"></i></button>
             </div>
             <div class="mini-calendar-grid" id="miniCalendar"></div>
@@ -324,7 +330,8 @@ $upcoming_events = array_values(array_filter($events ?? [], function ($e) use ($
 <!-- Pass PHP events to JS -->
 <script>
 window.BASE_URL = <?= json_encode(BASE_URL) ?>;
-window.studentEvents = <?= json_encode(array_map(function($e) {
+window.csrfToken = <?= json_encode(function_exists('csrf_token') ? csrf_token() : '') ?>;
+window.studentEvents = <?= json_encode(array_map(function ($e) use ($registered_event_ids, $reg_count_by_event, $feedback_submitted_ids) {
     $date = trim($e['date'] ?? '');
     $startTime = isset($e['start_time']) ? trim($e['start_time']) : '';
     $endTime = isset($e['end_time']) && $e['end_time'] !== null && $e['end_time'] !== '' ? trim($e['end_time']) : '';
@@ -347,6 +354,13 @@ window.studentEvents = <?= json_encode(array_map(function($e) {
         $end = $date;
         $allDay = true;
     }
+    $eid = isset($e['id']) ? (int) $e['id'] : 0;
+    $mc = $e['max_capacity'] ?? null;
+    $maxCap = ($mc !== null && $mc !== '') ? (int) $mc : null;
+    $regCount = $reg_count_by_event[$eid] ?? 0;
+    $isRegistered = in_array($eid, $registered_event_ids, true);
+    $hasFeedback = in_array($eid, $feedback_submitted_ids, true);
+
     return [
         'id'     => $e['id'] ?? null,
         'title'  => $e['title'] ?? 'Untitled',
@@ -354,11 +368,17 @@ window.studentEvents = <?= json_encode(array_map(function($e) {
         'end'    => $end,
         'allDay' => $allDay,
         'extendedProps' => [
-            'location'    => $e['location'] ?? '',
-            'description' => $e['description'] ?? '',
-            'start_time'  => $e['start_time'] ?? null,
-            'end_time'    => $e['end_time'] ?? null,
-            'department'  => $e['department'] ?? 'ALL',
+            'event_id'            => $eid,
+            'event_date_ymd'      => $date,
+            'location'            => $e['location'] ?? '',
+            'description'         => $e['description'] ?? '',
+            'start_time'          => $e['start_time'] ?? null,
+            'end_time'            => $e['end_time'] ?? null,
+            'department'          => $e['department'] ?? 'ALL',
+            'max_capacity'        => $maxCap,
+            'registration_count'  => $regCount,
+            'is_registered'       => $isRegistered,
+            'has_feedback'        => $hasFeedback,
         ],
     ];
 }, $events), JSON_HEX_TAG|JSON_HEX_APOS|JSON_HEX_QUOT|JSON_HEX_AMP); ?>;
@@ -443,14 +463,43 @@ window.currentUser = {
         </h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
-      <div class="modal-body">
+      <div class="modal-body" id="studentNotificationsModalBody">
+        <h6 class="text-uppercase small text-muted mb-2">In-app messages</h6>
+        <?php if (!empty($student_notifications)): ?>
+          <div class="list-group mb-4">
+            <?php foreach ($student_notifications as $n): ?>
+              <?php
+                $nid = (int) ($n['id'] ?? 0);
+                $isUnread = empty($n['read_at']);
+                $markUrl = BASE_URL . '/backend/auth/mark_notification_read.php?id=' . $nid;
+              ?>
+              <a href="<?= htmlspecialchars($markUrl) ?>" class="list-group-item list-group-item-action <?= $isUnread ? 'list-group-item-light fw-semibold' : '' ?>">
+                <div class="d-flex w-100 justify-content-between align-items-start gap-2">
+                  <div>
+                    <div class="mb-1"><?= htmlspecialchars($n['title'] ?? 'Notification') ?></div>
+                    <?php if (!empty($n['message'])): ?>
+                      <div class="small text-muted"><?= nl2br(htmlspecialchars($n['message'])) ?></div>
+                    <?php endif; ?>
+                    <?php if (!empty($n['created_at'])): ?>
+                      <div class="small text-muted mt-1"><?= htmlspecialchars($n['created_at']) ?></div>
+                    <?php endif; ?>
+                  </div>
+                  <?php if ($isUnread): ?>
+                    <span class="badge bg-primary rounded-pill">New</span>
+                  <?php endif; ?>
+                </div>
+              </a>
+            <?php endforeach; ?>
+          </div>
+        <?php else: ?>
+          <p class="small text-muted mb-4">No system notifications yet.</p>
+        <?php endif; ?>
+
+        <h6 class="text-uppercase small text-muted mb-2">Upcoming events (tap to open details)</h6>
         <?php if (!empty($upcoming_events)): ?>
-          <p class="small text-muted mb-2">
-            These are announcements and available upcoming events for you (including your department and all-department events).
-          </p>
           <div class="list-group">
             <?php foreach ($upcoming_events as $event): ?>
-              <div class="list-group-item list-group-item-action student-event-link" data-event-id="<?= isset($event['id']) ? (int)$event['id'] : '' ?>" role="button">
+              <div class="list-group-item list-group-item-action student-event-link" data-event-id="<?= isset($event['id']) ? (int)$event['id'] : '' ?>" role="button" data-bs-dismiss="modal">
                 <div class="d-flex w-100 justify-content-between">
                   <h6 class="mb-1">
                     <i class="fas fa-calendar-day me-1 text-primary"></i>
@@ -481,13 +530,16 @@ window.currentUser = {
             <?php endforeach; ?>
           </div>
         <?php else: ?>
-          <p class="mb-0 text-muted">You have no event announcements or available events at the moment.</p>
+          <p class="mb-0 text-muted small">No upcoming events for your department right now.</p>
         <?php endif; ?>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-outline-secondary btn-sm" id="studentNotificationsClearBtn">
-          <i class="fas fa-check-double me-1"></i> Clear
-        </button>
+        <a href="<?= BASE_URL ?>/backend/auth/mark_notification_read.php?mark_all=1" class="btn btn-outline-secondary btn-sm" id="studentNotificationsMarkAllLink">
+          <i class="fas fa-check-double me-1"></i> Mark all read
+        </a>
+        <a href="<?= BASE_URL ?>/backend/auth/mark_notification_read.php?clear_all=1" class="btn btn-outline-danger btn-sm" onclick="return confirm('Clear all notifications? This cannot be undone.');">
+          <i class="fas fa-trash me-1"></i> Clear all
+        </a>
         <button type="button" class="btn btn-outline-primary btn-sm" id="studentOpenUpcomingFromNotifBtn">
           <i class="fas fa-external-link-alt me-1"></i> View all upcoming events
         </button>
@@ -497,7 +549,7 @@ window.currentUser = {
   </div>
 </div>
 
-<!-- Upcoming Events Modal -->
+<!-- Upcoming Events Modal (same structure as Notifications: events first, then in-app messages) -->
 <div class="modal fade" id="studentUpcomingEventsModal" tabindex="-1" aria-labelledby="studentUpcomingEventsModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
     <div class="modal-content">
@@ -507,13 +559,15 @@ window.currentUser = {
         </h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
-      <div class="modal-body">
+      <div class="modal-body" id="studentUpcomingEventsModalBody">
+        <h6 class="text-uppercase small text-muted mb-2">Upcoming events <span class="fw-normal">(tap to open details)</span></h6>
         <?php if (!empty($upcoming_events)): ?>
-          <div class="list-group">
+          <div class="list-group mb-4">
             <?php foreach ($upcoming_events as $event): ?>
-              <div class="list-group-item list-group-item-action student-event-link" data-event-id="<?= isset($event['id']) ? (int)$event['id'] : '' ?>" role="button">
+              <div class="list-group-item list-group-item-action student-event-link" data-event-id="<?= isset($event['id']) ? (int)$event['id'] : '' ?>" role="button" data-bs-dismiss="modal">
                 <div class="d-flex w-100 justify-content-between">
                   <h6 class="mb-1">
+                    <i class="fas fa-calendar-day me-1 text-primary"></i>
                     <?= htmlspecialchars($event['title'] ?? 'Untitled') ?>
                   </h6>
                   <?php if (!empty($event['date'])): ?>
@@ -541,10 +595,50 @@ window.currentUser = {
             <?php endforeach; ?>
           </div>
         <?php else: ?>
-          <p class="mb-0 text-muted">There are no upcoming events for your department right now.</p>
+          <p class="small text-muted mb-4">No upcoming events for your department right now.</p>
+        <?php endif; ?>
+
+        <h6 class="text-uppercase small text-muted mb-2">In-app messages</h6>
+        <?php if (!empty($student_notifications)): ?>
+          <div class="list-group">
+            <?php foreach ($student_notifications as $n): ?>
+              <?php
+                $nid = (int) ($n['id'] ?? 0);
+                $isUnread = empty($n['read_at']);
+                $markUrl = BASE_URL . '/backend/auth/mark_notification_read.php?id=' . $nid;
+              ?>
+              <a href="<?= htmlspecialchars($markUrl) ?>" class="list-group-item list-group-item-action <?= $isUnread ? 'list-group-item-light fw-semibold' : '' ?>">
+                <div class="d-flex w-100 justify-content-between align-items-start gap-2">
+                  <div>
+                    <div class="mb-1"><?= htmlspecialchars($n['title'] ?? 'Notification') ?></div>
+                    <?php if (!empty($n['message'])): ?>
+                      <div class="small text-muted"><?= nl2br(htmlspecialchars($n['message'])) ?></div>
+                    <?php endif; ?>
+                    <?php if (!empty($n['created_at'])): ?>
+                      <div class="small text-muted mt-1"><?= htmlspecialchars($n['created_at']) ?></div>
+                    <?php endif; ?>
+                  </div>
+                  <?php if ($isUnread): ?>
+                    <span class="badge bg-primary rounded-pill">New</span>
+                  <?php endif; ?>
+                </div>
+              </a>
+            <?php endforeach; ?>
+          </div>
+        <?php else: ?>
+          <p class="mb-0 small text-muted">No system notifications yet.</p>
         <?php endif; ?>
       </div>
       <div class="modal-footer">
+        <a href="<?= BASE_URL ?>/backend/auth/mark_notification_read.php?mark_all=1" class="btn btn-outline-secondary btn-sm">
+          <i class="fas fa-check-double me-1"></i> Mark all read
+        </a>
+        <a href="<?= BASE_URL ?>/backend/auth/mark_notification_read.php?clear_all=1" class="btn btn-outline-danger btn-sm" onclick="return confirm('Clear all notifications? This cannot be undone.');">
+          <i class="fas fa-trash me-1"></i> Clear all
+        </a>
+        <button type="button" class="btn btn-outline-primary btn-sm" id="studentOpenNotificationsFromUpcomingBtn">
+          <i class="fas fa-bell me-1"></i> Open notifications
+        </button>
         <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
       </div>
     </div>
@@ -808,37 +902,11 @@ document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') closeProfilePicFullscreen();
 });
 
-// Hide notification badge on bell after opening notifications modal
 document.addEventListener('DOMContentLoaded', function () {
     var notifModal = document.getElementById('studentNotificationsModal');
-    var notifButton = document.querySelector('.navbar-right .nav-btn.position-relative[title="Notifications"]');
-    var clearBtn = document.getElementById('studentNotificationsClearBtn');
     var openUpcomingFromNotifBtn = document.getElementById('studentOpenUpcomingFromNotifBtn');
+    var openNotifFromUpcomingBtn = document.getElementById('studentOpenNotificationsFromUpcomingBtn');
     var upcomingModal = document.getElementById('studentUpcomingEventsModal');
-
-    if (notifModal && notifButton) {
-        notifModal.addEventListener('shown.bs.modal', function () {
-            var badge = notifButton.querySelector('.badge');
-            if (badge) {
-                badge.classList.add('d-none');
-            }
-        });
-    }
-
-    if (clearBtn && notifButton && notifModal) {
-        clearBtn.addEventListener('click', function () {
-            // Hide badge
-            var badge = notifButton.querySelector('.badge');
-            if (badge) {
-                badge.classList.add('d-none');
-            }
-            // Replace list with "no notifications" text
-            var body = notifModal.querySelector('.modal-body');
-            if (body) {
-                body.innerHTML = '<p class="mb-0 text-muted">You have cleared your notifications for now.</p>';
-            }
-        });
-    }
 
     if (openUpcomingFromNotifBtn && notifModal && upcomingModal) {
         openUpcomingFromNotifBtn.addEventListener('click', function () {
@@ -848,6 +916,18 @@ document.addEventListener('DOMContentLoaded', function () {
             }
             setTimeout(function () {
                 bootstrap.Modal.getOrCreateInstance(upcomingModal).show();
+            }, 300);
+        });
+    }
+
+    if (openNotifFromUpcomingBtn && notifModal && upcomingModal) {
+        openNotifFromUpcomingBtn.addEventListener('click', function () {
+            var upInstance = bootstrap.Modal.getInstance(upcomingModal);
+            if (upInstance) {
+                upInstance.hide();
+            }
+            setTimeout(function () {
+                bootstrap.Modal.getOrCreateInstance(notifModal).show();
             }, 300);
         });
     }

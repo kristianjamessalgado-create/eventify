@@ -181,6 +181,7 @@ if (is_array($events)) {
                         $title = (string)($ev['title'] ?? '');
                         $location = (string)($ev['location'] ?? '');
                         $myCount = (int)($ev['my_photo_count'] ?? 0);
+                        $myDraftCount = (int)($ev['my_draft_count'] ?? 0);
                         $previewPath = null;
                         if (!empty($photosByEvent) && isset($photosByEvent[$eid]) && !empty($photosByEvent[$eid][0]['file_path'])) {
                             $previewPath = $photosByEvent[$eid][0]['file_path'];
@@ -223,6 +224,11 @@ if (is_array($events)) {
                                 <span class="photo-badge">
                                     <i class="fas fa-images"></i> <?= (int)($ev['photo_count'] ?? 0) ?> photo(s)
                                 </span>
+                                <?php if ($myDraftCount > 0): ?>
+                                    <span class="photo-badge" title="Draft photos uploaded by you">
+                                        <i class="fas fa-hourglass-half"></i> <?= $myDraftCount ?> draft
+                                    </span>
+                                <?php endif; ?>
                             </div>
                         </div>
 
@@ -232,6 +238,16 @@ if (is_array($events)) {
                                     data-event-title="<?= htmlspecialchars($title) ?>">
                                 <i class="fas fa-cloud-upload-alt"></i> Upload
                             </button>
+                            <form method="POST" action="<?= BASE_URL ?>/backend/auth/publish_event_photos.php" class="d-inline">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="event_id" value="<?= $eid ?>">
+                                <button type="submit"
+                                        class="btn btn-outline-success <?= $myDraftCount <= 0 ? 'disabled' : '' ?>"
+                                        <?= $myDraftCount <= 0 ? 'disabled aria-disabled="true"' : '' ?>
+                                        title="Publish your draft photos for students">
+                                    <i class="fas fa-bullhorn"></i> Publish
+                                </button>
+                            </form>
                             <button type="button"
                                     class="btn btn-outline-secondary btn-gallery <?= empty($ev['photo_count']) ? 'disabled' : '' ?>"
                                     <?= empty($ev['photo_count']) ? 'disabled aria-disabled="true"' : '' ?>
@@ -241,6 +257,12 @@ if (is_array($events)) {
                                     data-event-title="<?= htmlspecialchars($title) ?>">
                                 <i class="fas fa-folder-open"></i> View
                             </button>
+                            <a href="<?= BASE_URL ?>/event_photos_qr.php?id=<?= $eid ?>"
+                               class="btn btn-outline-primary"
+                               target="_blank"
+                               title="Generate QR for student photo gallery">
+                                <i class="fas fa-qrcode"></i> QR
+                            </a>
                             <button type="button"
                                     class="btn btn-outline-danger btn-delete-photos <?= $myCount <= 0 ? 'disabled' : '' ?>"
                                     <?= $myCount <= 0 ? 'disabled aria-disabled="true"' : '' ?>

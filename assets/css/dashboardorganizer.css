@@ -1,4 +1,60 @@
 /* ===============================
+   UI POLISH LAYER
+================================ */
+.main-content {
+    border-left: 1px solid #e2e8f0;
+}
+
+.section-title {
+    letter-spacing: 0.08em;
+    color: #64748b;
+}
+
+.action-btn {
+    border-radius: 10px;
+    border-color: #e2e8f0;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+
+.action-btn:hover {
+    background: #f8fafc;
+    border-color: #cbd5e1;
+    transform: translateY(-1px);
+}
+
+.calendar-controls {
+    background: #f8fafc;
+}
+
+.calendar-title {
+    font-size: 22px;
+    letter-spacing: 0.01em;
+}
+
+.control-nav,
+.view-btn {
+    border-radius: 10px;
+}
+
+.view-btn.active {
+    box-shadow: 0 8px 20px rgba(124, 58, 237, 0.24);
+}
+
+.event-item {
+    border-radius: 14px;
+    border-color: #e2e8f0;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+}
+
+.event-item:hover {
+    box-shadow: 0 10px 22px rgba(15, 23, 42, 0.12);
+}
+
+.modal-content {
+    border-radius: 14px;
+    border: 1px solid #e2e8f0;
+}
+/* ===============================
    RESET & BASE
 ================================ */
 * {
@@ -750,6 +806,27 @@ body, html {
     color: #ffffff !important;
 }
 
+/* Event Colors by Lifecycle State (takes priority) */
+.fc-event[data-event-state="active"] {
+    background-color: #16a34a !important;
+    color: #ffffff !important;
+}
+
+.fc-event[data-event-state="upcoming"] {
+    background-color: #f59e0b !important;
+    color: #ffffff !important;
+}
+
+.fc-event[data-event-state="closed"] {
+    background-color: #6b7280 !important;
+    color: #ffffff !important;
+}
+
+.fc-event[data-event-state="rejected"] {
+    background-color: #dc2626 !important;
+    color: #ffffff !important;
+}
+
 /* Default event color */
 .fc-event {
     background-color: #7c3aed !important;
@@ -809,4 +886,33 @@ body, html {
     .upcoming-events-section {
         padding: 16px;
     }
+
+    .event-actions {
+        width: 100%;
+    }
+
+    .event-actions .btn,
+    .event-actions form {
+        flex: 1 1 calc(50% - 6px);
+        min-width: 120px;
+    }
+
+    .modal-dialog {
+        margin: 0.5rem;
+    }
+}
+
+/* Create-event modal: Leaflet map */
+.event-location-map {
+    height: 260px;
+    border-radius: 8px;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    overflow: hidden;
+    z-index: 0;
+}
+
+.organizer-loc-results {
+    max-height: 160px;
+    overflow-y: auto;
+    z-index: 2;
 }

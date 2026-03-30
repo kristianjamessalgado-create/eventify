@@ -14,6 +14,15 @@ html {
     overflow: hidden;
 }
 
+html.embed-mode {
+    height: auto;
+    min-height: 0;
+    overflow: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+html.embed-mode::-webkit-scrollbar { display: none; width: 0; height: 0; }
+
 body {
     height: 100%;
     width: 100%;
@@ -25,6 +34,119 @@ body {
     background: #0d1b2a;
     margin: 0;
     padding: 0;
+}
+
+/* Embedded mode (landing modal iframe): compact card, no giant background area */
+body.embed-mode {
+    min-height: 0 !important;
+    height: auto !important;
+    display: block;
+    background: transparent;
+    overflow: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    padding: 8px 0 0;
+    position: relative;
+}
+body.embed-mode::-webkit-scrollbar { display: none; width: 0; height: 0; }
+
+/* Keep video visible in landing modal (iframe); fills iframe behind the form */
+body.embed-mode #bgVideo {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center center;
+    z-index: 0;
+    pointer-events: none;
+}
+
+body.embed-mode .container {
+    position: relative;
+    z-index: 1;
+    width: min(100%, 360px);
+    max-width: 100%;
+    max-height: calc(100vh - 20px);
+    margin: 0 auto 0;
+    padding: 12px 16px 12px;
+    border-radius: 18px;
+    box-shadow:
+        0 16px 48px rgba(0, 0, 0, 0.45),
+        0 0 0 1px rgba(0, 255, 136, 0.35);
+    backdrop-filter: blur(14px);
+    background: rgba(0, 0, 0, 0.58);
+}
+
+body.embed-mode .form-box {
+    gap: 0;
+    padding-bottom: 22px;
+}
+
+body.embed-mode .form-box.login {
+    padding: 0 4px 4px;
+}
+
+body.embed-mode .form-box h1 {
+    margin-bottom: 6px;
+    margin-top: 4px;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+body.embed-mode .container.active .form-box.register h1 {
+    margin-bottom: 18px;
+}
+
+body.embed-mode .input-box {
+    margin: 6px 0;
+}
+
+body.embed-mode .input-box input,
+body.embed-mode .input-box select {
+    padding: 10px 12px;
+    padding-right: 40px;
+    border-radius: 10px;
+    font-size: 13px;
+    min-height: 40px;
+}
+
+body.embed-mode .input-box i {
+    right: 14px;
+}
+
+body.embed-mode .field-hint,
+body.embed-mode .caps-warning {
+    margin-top: 6px;
+    margin-bottom: 4px;
+}
+
+body.embed-mode .btn {
+    margin-top: 6px;
+    margin-bottom: 2px;
+    padding: 9px 12px;
+    font-size: 14px;
+    border-radius: 10px;
+}
+
+body.embed-mode .switch-btn {
+    margin-top: 6px;
+    margin-bottom: 2px;
+    padding: 2px 2px 4px;
+    font-size: 12px;
+}
+body.embed-mode .reactivate-otp-link {
+    margin-top: 2px;
+    font-size: 11px;
+}
+
+body.embed-mode .alert {
+    margin-bottom: 18px;
+    padding: 12px 14px;
+    border-radius: 10px;
 }
 
 /* === VIDEO BACKGROUND === */
@@ -43,7 +165,7 @@ body {
     position: relative;
     width: 400px;
     max-width: 90%;
-    max-height: 90vh;
+    max-height: calc(100vh - 20px);
     padding: 32px 24px;
     background: rgba(0,0,0,0.6);
     border-radius: 20px;
@@ -60,9 +182,11 @@ body {
     transform: translateY(20px);
     animation: fadeInUp 0.6s ease-out 0.3s forwards;
     margin: auto;
-    overflow-y: auto;
-    overflow-x: hidden;
+    overflow: hidden;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
 }
+.container::-webkit-scrollbar { display: none; width: 0; height: 0; }
 
 @keyframes fadeInUp {
     from {
@@ -82,6 +206,10 @@ body {
     flex-direction: column;
     align-items: center;
     text-align: center;
+}
+
+.form-box.login {
+    padding: 6px 8px 10px;
 }
 
 .form-box h1 {
@@ -187,6 +315,24 @@ body {
     text-decoration: underline;
     cursor: pointer;
     font-size: 14px;
+}
+
+.reactivate-otp-link {
+    display: block;
+    margin-top: 4px;
+    text-align: center;
+    color: #b6ffb6;
+    font-size: 12px;
+    line-height: 1.2;
+    text-decoration: underline;
+}
+
+.reactivate-otp-link-primary {
+    margin-top: 8px !important;
+    margin-bottom: 6px !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    color: #d2ffd2 !important;
 }
 
 /* === HIDE REGISTER FORM INITIALLY === */
@@ -328,7 +474,9 @@ body {
 }
 
 .container::-webkit-scrollbar {
-    width: 6px;
+    width: 0;
+    height: 0;
+    display: none;
 }
 
 .container::-webkit-scrollbar-track {
@@ -343,4 +491,132 @@ body {
 
 .container::-webkit-scrollbar-thumb:hover {
     background: rgba(0, 255, 0, 0.7);
+}
+
+/* Tablet/mobile hardening: prevent clipped forms on short screens */
+@media (max-width: 768px) {
+    html,
+    body {
+        overflow: auto;
+        height: auto;
+        min-height: 100%;
+    }
+
+    body {
+        align-items: flex-start;
+        padding: 12px;
+    }
+
+    body.embed-mode {
+        padding: 8px 0 8px;
+    }
+
+    body.embed-mode .container {
+        padding: 14px 16px 14px;
+    }
+
+    body.embed-mode .form-box {
+        padding-bottom: 8px;
+    }
+
+    body.embed-mode .form-box.login {
+        padding: 0 4px 8px;
+    }
+
+    .container {
+        width: 100%;
+        max-width: 520px;
+        max-height: none;
+        min-height: auto;
+        padding: 22px 16px;
+        margin: 0 auto;
+        border-radius: 14px;
+    }
+}
+
+/* Short viewport / modal iframe safety: always keep actions visible */
+@media (max-height: 760px) {
+    html,
+    body {
+        overflow: auto !important;
+        height: auto !important;
+        min-height: 100% !important;
+    }
+
+    body {
+        align-items: flex-start !important;
+        padding: 10px 0 !important;
+    }
+
+    .container {
+        width: min(100%, 360px);
+        max-height: none !important;
+        min-height: 0 !important;
+        padding: 12px 14px !important;
+        margin: 0 auto !important;
+        overflow-y: auto !important;
+    }
+
+    .form-box.login {
+        padding: 0 !important;
+    }
+
+    .form-box h1 {
+        font-size: 22px !important;
+        margin-bottom: 8px !important;
+    }
+
+    .input-box {
+        margin: 6px 0 !important;
+    }
+
+    .btn {
+        margin-top: 6px !important;
+        padding: 9px 12px !important;
+    }
+
+    .switch-btn {
+        margin-top: 6px !important;
+        margin-bottom: 2px !important;
+        font-size: 12px !important;
+        padding: 2px 2px 4px !important;
+    }
+}
+
+/* Final embed override: keep content visible (no clipping) */
+html.embed-mode,
+body.embed-mode {
+    overflow: auto !important;
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+}
+html.embed-mode::-webkit-scrollbar,
+body.embed-mode::-webkit-scrollbar,
+body.embed-mode .container::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+}
+body.embed-mode .container {
+    max-height: none !important;
+    min-height: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+}
+
+/* Keep OTP link visible under register/login switch link */
+body.embed-mode .reactivate-otp-link,
+.reactivate-otp-link {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    margin-top: 4px !important;
+    margin-bottom: 0 !important;
+    line-height: 1.35 !important;
+}
+
+body.embed-mode .reactivate-otp-link-primary {
+    margin-top: 8px !important;
+    margin-bottom: 8px !important;
+    font-size: 13px !important;
 }

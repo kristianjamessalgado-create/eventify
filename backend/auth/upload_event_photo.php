@@ -110,7 +110,11 @@ if (!is_dir($uploads_base)) {
     }
 }
 
-$insert = $conn->prepare("INSERT INTO event_photos (event_id, uploaded_by, file_path) VALUES (?, ?, ?)");
+$insert = $conn->prepare("INSERT INTO event_photos (event_id, uploaded_by, file_path, status, published_at) VALUES (?, ?, ?, 'draft', NULL)");
+if (!$insert) {
+    // Backward compatibility if status/published_at columns are not migrated yet
+    $insert = $conn->prepare("INSERT INTO event_photos (event_id, uploaded_by, file_path) VALUES (?, ?, ?)");
+}
 $uploaded = 0;
 
 foreach ($files as $f) {

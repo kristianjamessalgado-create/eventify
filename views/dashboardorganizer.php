@@ -1,6 +1,8 @@
 <?php
 $user = $user ?? ['name' => $user_name ?? 'Organizer', 'profile_picture' => null];
 $msg = $msg ?? '';
+$fb = $feedbackStats ?? ['total_feedback' => 0, 'avg_rating' => 0, 'five_star' => 0];
+$eventsHasGeo = !empty($eventsHasGeo);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -20,6 +22,8 @@ $msg = $msg ?? '';
 
     <!-- Custom CSS -->
     <link rel="stylesheet" href="<?= BASE_URL; ?>/assets/css/dashboardorganizer.css">
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 </head>
 <body>
 
@@ -79,6 +83,9 @@ $msg = $msg ?? '';
                     <li>
                         <a class="dropdown-item small text-center py-2" href="<?= BASE_URL ?>/backend/auth/mark_notification_read.php?mark_all=1"><i class="fas fa-check-double me-1"></i> Mark all as read</a>
                     </li>
+                    <li>
+                        <a class="dropdown-item small text-center py-2 text-danger" href="<?= BASE_URL ?>/backend/auth/mark_notification_read.php?clear_all=1" onclick="return confirm('Clear all notifications? This cannot be undone.');"><i class="fas fa-trash me-1"></i> Clear all</a>
+                    </li>
                 <?php endif; ?>
             </ul>
         </div>
@@ -136,7 +143,7 @@ $msg = $msg ?? '';
         <div class="mini-calendar-widget">
             <div class="mini-calendar-header">
                 <button class="mini-cal-nav" id="miniCalPrev"><i class="fas fa-chevron-left"></i></button>
-                <span class="mini-cal-month" id="miniCalMonth">September 2026</span>
+                <span class="mini-cal-month" id="miniCalMonth"><?= date('F Y') ?></span>
                 <button class="mini-cal-nav" id="miniCalNext"><i class="fas fa-chevron-right"></i></button>
             </div>
             <div class="mini-calendar-grid" id="miniCalendar"></div>
@@ -197,6 +204,10 @@ $msg = $msg ?? '';
                 <i class="fas fa-list"></i>
                 <span>My Events</span>
             </a>
+            <button type="button" class="action-btn" data-bs-toggle="modal" data-bs-target="#organizerFeedbackModal">
+                <i class="fas fa-star-half-stroke"></i>
+                <span>Feedback insights</span>
+            </button>
             <a href="#" class="action-btn" data-bs-toggle="modal" data-bs-target="#logoutModal">
                 <i class="fas fa-sign-out-alt"></i>
                 <span>Logout</span>
@@ -235,6 +246,44 @@ $msg = $msg ?? '';
 
         <!-- (Stats and lists removed; calendar is main focus) -->
     </main>
+</div>
+
+<!-- Feedback insights (sidebar) -->
+<div class="modal fade" id="organizerFeedbackModal" tabindex="-1" aria-labelledby="organizerFeedbackModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-md">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="organizerFeedbackModalLabel"><i class="fas fa-star-half-stroke me-2 text-warning"></i>Feedback insights</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small mb-3">Totals across feedback left on your events (when students submit ratings).</p>
+        <div class="row g-3">
+          <div class="col-12">
+            <div class="border rounded-3 p-3 bg-light">
+              <div class="small text-muted text-uppercase">Feedback entries</div>
+              <div class="h4 mb-0"><?= (int)($fb['total_feedback'] ?? 0) ?></div>
+            </div>
+          </div>
+          <div class="col-12">
+            <div class="border rounded-3 p-3 bg-light">
+              <div class="small text-muted text-uppercase">Average rating</div>
+              <div class="h4 mb-0"><?= number_format((float)($fb['avg_rating'] ?? 0), 2) ?> <small class="text-muted fs-6">/ 5</small></div>
+            </div>
+          </div>
+          <div class="col-12">
+            <div class="border rounded-3 p-3 bg-light">
+              <div class="small text-muted text-uppercase">5-star ratings</div>
+              <div class="h4 mb-0"><?= (int)($fb['five_star'] ?? 0) ?></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer border-0 pt-0">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- Events List Modal -->
@@ -276,6 +325,7 @@ $msg = $msg ?? '';
                   <?php
                   $evStatus = $event['status'] ?? '';
                   $evRejectReason = trim($event['reject_reason'] ?? '');
+                  $evStatusLower = strtolower((string) $evStatus);
                   ?>
                   <?php if ($evStatus === 'rejected' && $evRejectReason !== ''): ?>
                     <p class="event-meta text-danger small mb-1"><i class="fas fa-info-circle"></i> <strong>Rejection reason:</strong> <?= htmlspecialchars($evRejectReason) ?></p>
@@ -284,6 +334,23 @@ $msg = $msg ?? '';
                     <a class="btn btn-sm btn-outline-primary" href="<?= BASE_URL ?>/backend/auth/edit_event.php?id=<?= urlencode($event['id']) ?>">Edit</a>
                     <a class="btn btn-sm btn-outline-secondary" href="<?= BASE_URL ?>/event_qr.php?id=<?= urlencode($event['id']) ?>" target="_blank" rel="noopener" title="Show QR for check-in"><i class="fas fa-qrcode"></i> QR</a>
                     <a class="btn btn-sm btn-outline-info" href="<?= BASE_URL ?>/event_attendance.php?id=<?= urlencode($event['id']) ?>" target="_blank" rel="noopener" title="View who attended"><i class="fas fa-clipboard-check"></i> Attendance</a>
+                    <a class="btn btn-sm btn-outline-success" href="<?= BASE_URL ?>/event_rsvp.php?id=<?= urlencode($event['id']) ?>" target="_blank" rel="noopener" title="RSVP list and CSV export"><i class="fas fa-user-check"></i> RSVP</a>
+                    <?php if ($evStatusLower === 'pending'): ?>
+                      <form method="POST" action="<?= BASE_URL ?>/backend/auth/verify_event_approval_otp.php" class="d-inline-flex gap-1 align-items-center">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="event_id" value="<?= (int)$event['id'] ?>">
+                        <input type="text" name="otp_code" class="form-control form-control-sm" style="width: 110px;" maxlength="6" placeholder="Enter OTP" required pattern="\d{6}" inputmode="numeric">
+                        <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-key me-1"></i>Verify OTP</button>
+                      </form>
+                    <?php endif; ?>
+                    <?php if (in_array($evStatusLower, ['active', 'pending'], true)): ?>
+                      <form method="POST" action="<?= BASE_URL ?>/backend/auth/update_organizer_event_status.php" class="d-inline" onsubmit="return confirm('This will close this event for participants. Continue?');">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="event_id" value="<?= (int)$event['id'] ?>">
+                        <input type="hidden" name="action" value="close">
+                        <button type="submit" class="btn btn-sm btn-outline-danger"><i class="fas fa-ban"></i> Close</button>
+                      </form>
+                    <?php endif; ?>
                   </div>
                 </div>
               </div>
@@ -335,6 +402,27 @@ $msg = $msg ?? '';
           <div class="mb-3">
             <label class="form-label">Role</label>
             <input type="text" class="form-control" value="Organizer" readonly>
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="organizerAccountEmail">Account Email</label>
+            <input type="email" class="form-control" id="organizerAccountEmail" value="<?= htmlspecialchars($user['email'] ?? '') ?>" readonly>
+            <small class="text-muted">This is your login email.</small>
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="organizerContactMethod">OTP Verification Method</label>
+            <select class="form-select" id="organizerContactMethod" name="organizer_contact_method">
+              <?php $selContactMethod = $user['organizer_contact_method'] ?? 'email'; ?>
+              <option value="email" <?= $selContactMethod === 'email' ? 'selected' : '' ?>>Email</option>
+              <option value="phone" <?= $selContactMethod === 'phone' ? 'selected' : '' ?>>Phone number</option>
+            </select>
+          </div>
+          <div class="mb-3" id="organizerEmailFieldWrap">
+            <label class="form-label" for="organizerContactEmail">Verification Email</label>
+            <input type="email" class="form-control" id="organizerContactEmail" name="organizer_contact_email" value="<?= htmlspecialchars($user['organizer_contact_email'] ?? '') ?>" placeholder="Enter email for OTP">
+          </div>
+          <div class="mb-3" id="organizerPhoneFieldWrap">
+            <label class="form-label" for="organizerPhone">Verification Phone Number</label>
+            <input type="text" class="form-control" id="organizerPhone" name="organizer_phone" value="<?= htmlspecialchars($user['organizer_phone'] ?? '') ?>" maxlength="25" placeholder="e.g. 09XXXXXXXXX">
           </div>
         </div>
         <div class="modal-footer">
@@ -432,7 +520,7 @@ $msg = $msg ?? '';
         </h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
-      <form method="POST" action="<?= BASE_URL ?>/backend/auth/createevent.php">
+      <form method="POST" action="<?= BASE_URL ?>/backend/auth/createevent.php" id="createEventModalForm" data-require-geo="<?= $eventsHasGeo ? '1' : '0' ?>">
         <?= csrf_field() ?>
         <div class="modal-body">
           <div class="mb-3">
@@ -459,8 +547,22 @@ $msg = $msg ?? '';
             </div>
           </div>
           <div class="mb-3 mt-3">
-            <label for="ceLocation" class="form-label">Location <span class="text-danger">*</span></label>
-            <input type="text" name="location" id="ceLocation" class="form-control" maxlength="100" required>
+            <label class="form-label">Map location <span class="text-danger">*</span></label>
+            <p class="text-muted small mb-2">Search, tap the map, or use your device location. OpenStreetMap data is used for search and tiles.</p>
+            <input type="hidden" name="event_latitude" id="ceEventLatitude" value="">
+            <input type="hidden" name="event_longitude" id="ceEventLongitude" value="">
+            <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+              <input type="search" id="ceLocSearch" class="form-control" style="min-width:160px;flex:1" placeholder="Search place or address" autocomplete="off">
+              <button type="button" class="btn btn-outline-secondary btn-sm" id="ceLocSearchBtn">Search</button>
+              <button type="button" class="btn btn-outline-primary btn-sm" id="ceLocUseGps" title="Use GPS"><i class="fas fa-location-crosshairs"></i></button>
+            </div>
+            <div id="ceLocResults" class="list-group mb-2 organizer-loc-results" style="display:none;"></div>
+            <div id="ceLocationMap" class="event-location-map mb-2"></div>
+            <label for="ceLocation" class="form-label">Venue name / address <span class="text-danger">*</span></label>
+            <input type="text" name="location" id="ceLocation" class="form-control" maxlength="255" required placeholder="Shown to attendees">
+            <?php if ($eventsHasGeo): ?>
+            <small class="text-muted">Coordinates are required after you run the database migration for latitude and longitude.</small>
+            <?php endif; ?>
           </div>
           <div class="mb-3">
             <label for="ceDepartment" class="form-label">Department / Audience <span class="text-danger">*</span></label>
@@ -518,6 +620,7 @@ window.currentUser = {
     name: <?= json_encode($user_name) ?>,
     id: <?= json_encode($_SESSION['user_id'] ?? 0) ?>
 };
+window.currentRole = 'organizer';
 </script>
 
 <!-- Event Details Modal -->
@@ -556,8 +659,15 @@ window.currentUser = {
 <!-- Bootstrap JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="<?= BASE_URL ?>/assets/js/event_location_picker.js"></script>
+
 <!-- Dashboard Scripts -->
 <script src="<?= BASE_URL ?>/assets/js/dashboardorganizer.js"></script>
+
+<script>
+window.EVENTIFY_GEOCODE_URL = <?= json_encode(BASE_URL . '/backend/auth/geocode_proxy.php') ?>;
+</script>
 
 <script>
 // Open create-event modal from "My Events" footer button
@@ -565,6 +675,7 @@ document.addEventListener('DOMContentLoaded', function () {
   var openFromMyEvents = document.getElementById('openCreateEventFromMyEvents');
   var eventsModal = document.getElementById('eventsModal');
   var createModal = document.getElementById('createEventModal');
+  var cePickerInstance = null;
 
   if (openFromMyEvents && eventsModal && createModal) {
     openFromMyEvents.addEventListener('click', function () {
@@ -576,6 +687,68 @@ document.addEventListener('DOMContentLoaded', function () {
         bootstrap.Modal.getOrCreateInstance(createModal).show();
       }, 300);
     });
+  }
+
+  if (createModal && typeof window.initEventLocationPicker === 'function') {
+    createModal.addEventListener('shown.bs.modal', function () {
+      if (!cePickerInstance && window.L) {
+        cePickerInstance = window.initEventLocationPicker({
+          mapElId: 'ceLocationMap',
+          latInputId: 'ceEventLatitude',
+          lngInputId: 'ceEventLongitude',
+          addressInputId: 'ceLocation',
+          searchInputId: 'ceLocSearch',
+          searchBtnId: 'ceLocSearchBtn',
+          useLocationBtnId: 'ceLocUseGps',
+          resultsElId: 'ceLocResults',
+          geocodeBase: window.EVENTIFY_GEOCODE_URL || ''
+        });
+      }
+      if (cePickerInstance && cePickerInstance.map) {
+        setTimeout(function () {
+          cePickerInstance.map.invalidateSize(true);
+        }, 150);
+      }
+    });
+  }
+
+  var ceForm = document.getElementById('createEventModalForm');
+  if (ceForm) {
+    ceForm.addEventListener('submit', function (e) {
+      if (ceForm.getAttribute('data-require-geo') !== '1') return;
+      var lat = (document.getElementById('ceEventLatitude') || {}).value;
+      var lng = (document.getElementById('ceEventLongitude') || {}).value;
+      if (!lat || !lng || isNaN(parseFloat(lat)) || isNaN(parseFloat(lng))) {
+        e.preventDefault();
+        alert('Please set the venue on the map, search and pick a result, or use your location.');
+        return false;
+      }
+    });
+  }
+
+  var methodEl = document.getElementById('organizerContactMethod');
+  var emailWrap = document.getElementById('organizerEmailFieldWrap');
+  var phoneWrap = document.getElementById('organizerPhoneFieldWrap');
+  var emailInput = document.getElementById('organizerContactEmail');
+  var phoneInput = document.getElementById('organizerPhone');
+  function syncOrganizerOtpContactFields() {
+    if (!methodEl || !emailWrap || !phoneWrap || !emailInput || !phoneInput) return;
+    var method = methodEl.value === 'phone' ? 'phone' : 'email';
+    if (method === 'email') {
+      emailWrap.style.display = '';
+      phoneWrap.style.display = 'none';
+      emailInput.required = true;
+      phoneInput.required = false;
+    } else {
+      emailWrap.style.display = 'none';
+      phoneWrap.style.display = '';
+      emailInput.required = false;
+      phoneInput.required = true;
+    }
+  }
+  if (methodEl) {
+    methodEl.addEventListener('change', syncOrganizerOtpContactFields);
+    syncOrganizerOtpContactFields();
   }
 });
 </script>

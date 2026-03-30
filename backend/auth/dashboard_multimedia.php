@@ -3,10 +3,35 @@ session_start();
 include __DIR__ . '/../../config/db.php';
 include __DIR__ . '/../../config/config.php';
 include __DIR__ . '/../../config/csrf.php';
+require_once __DIR__ . '/../lib/event_status_auto.php';
 
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'multimedia') {
     header("Location: " . BASE_URL . "/views/login.php?error=" . urlencode("Access denied"));
     exit();
+}
+
+eventify_auto_complete_past_events($conn);
+
+$hasMustChangePasswordColumn = false;
+try {
+    $cpCol = $conn->query("SHOW COLUMNS FROM users LIKE 'must_change_password'");
+    $hasMustChangePasswordColumn = (bool)($cpCol && $cpCol->num_rows > 0);
+} catch (Throwable $e) {
+    $hasMustChangePasswordColumn = false;
+}
+if ($hasMustChangePasswordColumn) {
+    $forceCp = $conn->prepare("SELECT must_change_password FROM users WHERE id = ? LIMIT 1");
+    if ($forceCp) {
+        $uid = (int)($_SESSION['user_id'] ?? 0);
+        $forceCp->bind_param("i", $uid);
+        $forceCp->execute();
+        $cpRow = $forceCp->get_result()->fetch_assoc();
+        $forceCp->close();
+        if ((int)($cpRow['must_change_password'] ?? 0) === 1) {
+            header("Location: " . BASE_URL . "/views/change_password.php?from=required&next=" . urlencode(BASE_URL . "/backend/auth/dashboard_multimedia.php"));
+            exit();
+        }
+    }
 }
 
 $session_user_id = (int) $_SESSION['user_id'];
@@ -22,18 +47,39 @@ $stmt->close();
 $user_name  = $user['name'] ?? 'Multimedia';
 $user_department = $user['department'] ?? null;
 
+// Feature flag: photo publishing workflow (status column on event_photos)
+$photoStatusEnabled = false;
+$chkCol = $conn->query("SHOW COLUMNS FROM event_photos LIKE 'status'");
+if ($chkCol && $chkCol->num_rows > 0) {
+    $photoStatusEnabled = true;
+}
+
 // Fetch all events (newest date first)
 $events = [];
 $uid = (int)$session_user_id;
-$res = $conn->query("
-    SELECT e.id, e.title, e.date, e.location, e.department,
-           (SELECT COUNT(*) FROM event_photos p WHERE p.event_id = e.id) AS photo_count,
-           (SELECT COUNT(*) FROM event_photos p WHERE p.event_id = e.id AND p.uploaded_by = {$uid}) AS my_photo_count
-    FROM events e
-    WHERE e.title NOT LIKE 'sample%'
-      AND (" . (empty($user_department) ? "1=1" : "e.department = '" . $conn->real_escape_string($user_department) . "' OR e.department = 'ALL'") . ")
-    ORDER BY e.date DESC, e.id DESC
-");
+if ($photoStatusEnabled) {
+    $res = $conn->query("
+        SELECT e.id, e.title, e.date, e.location, e.department,
+               (SELECT COUNT(*) FROM event_photos p WHERE p.event_id = e.id AND p.status = 'published') AS photo_count,
+               (SELECT COUNT(*) FROM event_photos p WHERE p.event_id = e.id AND p.uploaded_by = {$uid}) AS my_photo_count,
+               (SELECT COUNT(*) FROM event_photos p WHERE p.event_id = e.id AND p.uploaded_by = {$uid} AND p.status = 'draft') AS my_draft_count
+        FROM events e
+        WHERE e.title NOT LIKE 'sample%'
+          AND (" . (empty($user_department) ? "1=1" : "e.department = '" . $conn->real_escape_string($user_department) . "' OR e.department = 'ALL'") . ")
+        ORDER BY e.date DESC, e.id DESC
+    ");
+} else {
+    $res = $conn->query("
+        SELECT e.id, e.title, e.date, e.location, e.department,
+               (SELECT COUNT(*) FROM event_photos p WHERE p.event_id = e.id) AS photo_count,
+               (SELECT COUNT(*) FROM event_photos p WHERE p.event_id = e.id AND p.uploaded_by = {$uid}) AS my_photo_count,
+               0 AS my_draft_count
+        FROM events e
+        WHERE e.title NOT LIKE 'sample%'
+          AND (" . (empty($user_department) ? "1=1" : "e.department = '" . $conn->real_escape_string($user_department) . "' OR e.department = 'ALL'") . ")
+        ORDER BY e.date DESC, e.id DESC
+    ");
+}
 if ($res) {
     while ($row = $res->fetch_assoc()) {
         $events[] = $row;

@@ -6,11 +6,36 @@ if (session_status() === PHP_SESSION_NONE) {
 include __DIR__ . '/../../config/db.php';
 include __DIR__ . '/../../config/config.php';
 include __DIR__ . '/../../config/csrf.php';
+require_once __DIR__ . '/../lib/event_status_auto.php';
 
 // Only super_admin
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'super_admin') {
     header("Location: " . BASE_URL . "/views/login.php?error=Access denied");
     exit();
+}
+
+eventify_auto_complete_past_events($conn);
+
+$hasMustChangePasswordColumn = false;
+try {
+    $cpCol = $conn->query("SHOW COLUMNS FROM users LIKE 'must_change_password'");
+    $hasMustChangePasswordColumn = (bool)($cpCol && $cpCol->num_rows > 0);
+} catch (Throwable $e) {
+    $hasMustChangePasswordColumn = false;
+}
+if ($hasMustChangePasswordColumn) {
+    $forceCp = $conn->prepare("SELECT must_change_password FROM users WHERE id = ? LIMIT 1");
+    if ($forceCp) {
+        $uid = (int)($_SESSION['user_id'] ?? 0);
+        $forceCp->bind_param("i", $uid);
+        $forceCp->execute();
+        $cpRow = $forceCp->get_result()->fetch_assoc();
+        $forceCp->close();
+        if ((int)($cpRow['must_change_password'] ?? 0) === 1) {
+            header("Location: " . BASE_URL . "/views/change_password.php?from=required&next=" . urlencode(BASE_URL . "/backend/super_admin/dashboardsuperadmin.php"));
+            exit();
+        }
+    }
 }
 
 // Logged-in super admin name (from session, or fetch from DB)
@@ -27,8 +52,24 @@ if ($superadmin_name === '') {
     }
 }
 
-// Fetch users
-$stmt = $conn->prepare("SELECT id, name, email, role, status FROM users");
+// Fetch users (paginated)
+$usersPage = max(1, (int) ($_GET['users_page'] ?? 1));
+$usersPerPage = 20;
+$usersTotal = 0;
+$usersTotalPages = 1;
+if ($resUsersCount = $conn->query("SELECT COUNT(*) AS c FROM users")) {
+    if ($row = $resUsersCount->fetch_assoc()) {
+        $usersTotal = (int) ($row['c'] ?? 0);
+    }
+}
+$usersTotalPages = max(1, (int) ceil($usersTotal / $usersPerPage));
+if ($usersPage > $usersTotalPages) {
+    $usersPage = $usersTotalPages;
+}
+$usersOffset = ($usersPage - 1) * $usersPerPage;
+$users = [];
+$stmt = $conn->prepare("SELECT id, name, email, role, status, failed_attempts FROM users ORDER BY id DESC LIMIT ? OFFSET ?");
+$stmt->bind_param("ii", $usersPerPage, $usersOffset);
 $stmt->execute();
 $result = $stmt->get_result();
 $users = $result->fetch_all(MYSQLI_ASSOC);
@@ -52,19 +93,40 @@ if ($stmtPending && $stmtPending->execute()) {
     $stmtPending->close();
 }
 
-// Fetch ALL events for Event Management and Calendar modals
+// Fetch ALL events for Event Management and Calendar modals (paginated list)
+$eventsPage = max(1, (int) ($_GET['events_page'] ?? 1));
+$eventsPerPage = 20;
+$eventsTotal = 0;
+$eventsTotalPages = 1;
+if ($resEventsCount = $conn->query("SELECT COUNT(*) AS c FROM events")) {
+    if ($row = $resEventsCount->fetch_assoc()) {
+        $eventsTotal = (int) ($row['c'] ?? 0);
+    }
+}
+$eventsTotalPages = max(1, (int) ceil($eventsTotal / $eventsPerPage));
+if ($eventsPage > $eventsTotalPages) {
+    $eventsPage = $eventsTotalPages;
+}
+$eventsOffset = ($eventsPage - 1) * $eventsPerPage;
 $allEvents = [];
-$resAll = $conn->query("
+$stmtAll = $conn->prepare("
     SELECT e.id, e.title, e.description, e.date, e.start_time, e.end_time, e.location, e.department, e.status, e.created_at,
            u.name AS organizer_name, u.email AS organizer_email
     FROM events e
     JOIN users u ON e.organizer_id = u.id
     ORDER BY e.date DESC, e.id DESC
+    LIMIT ? OFFSET ?
 ");
-if ($resAll) {
-    while ($row = $resAll->fetch_assoc()) {
-        $allEvents[] = $row;
+if ($stmtAll) {
+    $stmtAll->bind_param("ii", $eventsPerPage, $eventsOffset);
+    $stmtAll->execute();
+    $resAll = $stmtAll->get_result();
+    if ($resAll) {
+        while ($row = $resAll->fetch_assoc()) {
+            $allEvents[] = $row;
+        }
     }
+    $stmtAll->close();
 }
 
 // Fetch recent activity logs (latest 20)
@@ -109,6 +171,15 @@ foreach ($users as $u) {
     }
 }
 
+$saUserRoleLabels = ['Super Admin', 'Admin', 'Organizer', 'Multimedia', 'Student'];
+$saUserRoleCounts = [
+    (int) ($userStats['super_admin'] ?? 0),
+    (int) ($userStats['admin'] ?? 0),
+    (int) ($userStats['organizer'] ?? 0),
+    (int) ($userStats['multimedia'] ?? 0),
+    (int) ($userStats['student'] ?? 0),
+];
+
 // Event stats
 $eventStats = [
     'total'    => 0,
@@ -132,6 +203,14 @@ if ($resEvents = $conn->query($sqlEvents)) {
         }
     }
 }
+
+$saEventStatusLabels = ['Pending', 'Active', 'Rejected', 'Closed'];
+$saEventStatusCounts = [
+    (int) ($eventStats['pending'] ?? 0),
+    (int) ($eventStats['active'] ?? 0),
+    (int) ($eventStats['rejected'] ?? 0),
+    (int) ($eventStats['closed'] ?? 0),
+];
 
 // Logins today (from activity_logs)
 $loginTodayCount = 0;

@@ -5,11 +5,36 @@ session_start();
 include __DIR__ . '/../../config/db.php';
 include __DIR__ . '/../../config/config.php'; // for BASE_URL
 include __DIR__ . '/../../config/csrf.php';
+require_once __DIR__ . '/../lib/event_status_auto.php';
 
 // Only allow logged-in students
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'student') {
     header("Location: " . BASE_URL . "/views/login.php?error=Access denied");
     exit();
+}
+
+eventify_auto_complete_past_events($conn);
+
+$hasMustChangePasswordColumn = false;
+try {
+    $cpCol = $conn->query("SHOW COLUMNS FROM users LIKE 'must_change_password'");
+    $hasMustChangePasswordColumn = (bool)($cpCol && $cpCol->num_rows > 0);
+} catch (Throwable $e) {
+    $hasMustChangePasswordColumn = false;
+}
+if ($hasMustChangePasswordColumn) {
+    $forceCp = $conn->prepare("SELECT must_change_password FROM users WHERE id = ? LIMIT 1");
+    if ($forceCp) {
+        $uid = (int)($_SESSION['user_id'] ?? 0);
+        $forceCp->bind_param("i", $uid);
+        $forceCp->execute();
+        $cpRow = $forceCp->get_result()->fetch_assoc();
+        $forceCp->close();
+        if ((int)($cpRow['must_change_password'] ?? 0) === 1) {
+            header("Location: " . BASE_URL . "/views/change_password.php?from=required&next=" . urlencode(BASE_URL . "/backend/auth/dashboard_student.php"));
+            exit();
+        }
+    }
 }
 
 // Logged-in user's ID
@@ -63,6 +88,74 @@ if ($stmt_att->execute()) {
         $attendance_records = $res_att->fetch_all(MYSQLI_ASSOC);
     }
     $stmt_att->close();
+}
+
+// RSVP: which events this student is registered for
+$registered_event_ids = [];
+$stmtReg = $conn->prepare("SELECT event_id FROM registrations WHERE user_id = ?");
+$stmtReg->bind_param("i", $session_user_id);
+if ($stmtReg->execute()) {
+    $rr = $stmtReg->get_result();
+    if ($rr) {
+        while ($row = $rr->fetch_assoc()) {
+            $registered_event_ids[] = (int) $row['event_id'];
+        }
+    }
+    $stmtReg->close();
+}
+
+// RSVP counts per event (for capacity display)
+$reg_count_by_event = [];
+$rc = $conn->query("SELECT event_id, COUNT(*) AS cnt FROM registrations GROUP BY event_id");
+if ($rc) {
+    while ($row = $rc->fetch_assoc()) {
+        $reg_count_by_event[(int) $row['event_id']] = (int) $row['cnt'];
+    }
+}
+
+// Feedback already submitted (event_feedback table may not exist yet)
+$feedback_submitted_ids = [];
+try {
+    $stmtFb = $conn->prepare("SELECT event_id FROM event_feedback WHERE user_id = ?");
+    if ($stmtFb) {
+        $stmtFb->bind_param("i", $session_user_id);
+        if ($stmtFb->execute()) {
+            $rf = $stmtFb->get_result();
+            if ($rf) {
+                while ($row = $rf->fetch_assoc()) {
+                    $feedback_submitted_ids[] = (int) $row['event_id'];
+                }
+            }
+        }
+        $stmtFb->close();
+    }
+} catch (Throwable $e) {
+    $feedback_submitted_ids = [];
+}
+
+// In-app notifications
+$student_notifications = [];
+$unread_notif_count = 0;
+try {
+    $stmtN = $conn->prepare("SELECT id, type, title, message, event_id, read_at, created_at FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 40");
+    if ($stmtN) {
+        $stmtN->bind_param("i", $session_user_id);
+        if ($stmtN->execute()) {
+            $rn = $stmtN->get_result();
+            if ($rn) {
+                $student_notifications = $rn->fetch_all(MYSQLI_ASSOC);
+            }
+        }
+        $stmtN->close();
+    }
+    foreach ($student_notifications as $n) {
+        if (empty($n['read_at'])) {
+            $unread_notif_count++;
+        }
+    }
+} catch (Throwable $e) {
+    $student_notifications = [];
+    $unread_notif_count = 0;
 }
 
 // Include the view

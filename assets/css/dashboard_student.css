@@ -1,4 +1,69 @@
 /* ===============================
+   UI POLISH LAYER
+================================ */
+.main-content {
+    border-left: 1px solid #e2e8f0;
+}
+
+.section-title {
+    letter-spacing: 0.08em;
+    color: #64748b;
+}
+
+.action-btn {
+    border-radius: 10px;
+    border-color: #e2e8f0;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+
+.action-btn:hover {
+    background: #f8fafc;
+    border-color: #cbd5e1;
+    transform: translateY(-1px);
+}
+
+.calendar-controls {
+    background: #f8fafc;
+}
+
+.calendar-title {
+    font-size: 22px;
+    letter-spacing: 0.01em;
+}
+
+.control-nav,
+.view-btn {
+    border-radius: 10px;
+}
+
+.view-btn.active {
+    box-shadow: 0 8px 20px rgba(16, 185, 129, 0.24);
+}
+
+.calendar-container {
+    background: #ffffff;
+}
+
+.event-item {
+    border-radius: 14px;
+    border-color: #e2e8f0;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+}
+
+.event-item:hover {
+    box-shadow: 0 10px 22px rgba(15, 23, 42, 0.12);
+}
+
+.btn-primary {
+    border-radius: 10px;
+    font-weight: 600;
+}
+
+.modal-content {
+    border-radius: 14px;
+    border: 1px solid #e2e8f0;
+}
+/* ===============================
    RESET & BASE
 ================================ */
 * {
@@ -13,6 +78,7 @@ body, html {
     color: #1f2937;
     height: 100%;
     overflow-x: hidden;
+    overflow-y: auto;
 }
 
 /* ===============================
@@ -138,8 +204,8 @@ body, html {
 .dashboard-layout {
     display: flex;
     margin-top: 64px;
-    height: calc(100vh - 64px);
-    overflow: hidden;
+    min-height: calc(100vh - 64px);
+    overflow: visible;
 }
 
 /* ===============================
@@ -428,7 +494,8 @@ body, html {
     flex: 1;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
     background: #ffffff;
     box-shadow: -4px 0 24px rgba(0, 0, 0, 0.15);
 }
@@ -507,11 +574,11 @@ body, html {
 }
 
 .calendar-container {
-    flex: 1;
+    flex: 0 0 auto;
     padding: 24px;
-    overflow: visible;
-    display: flex;
-    flex-direction: column;
+    overflow-y: auto;
+    overflow-x: hidden;
+    display: block;
     min-height: 0;
 }
 
@@ -521,7 +588,7 @@ body, html {
 #student-calendar {
     background: #ffffff;
     font-family: inherit;
-    flex: 1;
+    width: 100%;
     min-height: 0;
 }
 
@@ -553,11 +620,13 @@ body, html {
 }
 
 .fc-scroller {
-    overflow: visible !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
 }
 
 .fc-scroller-liquid-absolute {
-    overflow: visible !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
 }
 
 .fc-day-today {
@@ -637,6 +706,27 @@ body, html {
 
 .fc-event[data-dept="Senior High"] {
     background-color: #ef4444 !important;
+    color: #ffffff !important;
+}
+
+/* Event Colors by Lifecycle State (takes priority) */
+.fc-event[data-event-state="active"] {
+    background-color: #16a34a !important;
+    color: #ffffff !important;
+}
+
+.fc-event[data-event-state="upcoming"] {
+    background-color: #f59e0b !important;
+    color: #ffffff !important;
+}
+
+.fc-event[data-event-state="closed"] {
+    background-color: #6b7280 !important;
+    color: #ffffff !important;
+}
+
+.fc-event[data-event-state="rejected"] {
+    background-color: #dc2626 !important;
     color: #ffffff !important;
 }
 
@@ -1108,6 +1198,10 @@ body, html {
 
     .upcoming-events-section {
         padding: 16px;
+    }
+
+    .modal-dialog {
+        margin: 0.5rem;
     }
 }
 

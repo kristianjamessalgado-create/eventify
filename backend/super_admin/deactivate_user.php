@@ -5,6 +5,7 @@ if (session_status() === PHP_SESSION_NONE) {
 
 include __DIR__ . '/../../config/db.php';
 include __DIR__ . '/../../config/config.php';
+include __DIR__ . '/../../config/csrf.php';
 include __DIR__ . '/../../backend/lib/activity_logger.php';
 
 // Only super admin can deactivate accounts
@@ -13,12 +14,17 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'super_admin') {
     exit();
 }
 
-if (!isset($_GET['id']) || !ctype_digit($_GET['id'])) {
+if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !csrf_validate()) {
+    header("Location: " . BASE_URL . "/backend/super_admin/dashboardsuperadmin.php?success=" . urlencode("Invalid request."));
+    exit();
+}
+
+if (!isset($_POST['id']) || !ctype_digit((string)$_POST['id'])) {
     header("Location: " . BASE_URL . "/backend/super_admin/dashboardsuperadmin.php?success=" . urlencode("Invalid user ID"));
     exit();
 }
 
-$id = (int)$_GET['id'];
+$id = (int)$_POST['id'];
 
 // Prevent deactivating own account
 if ($id === (int)($_SESSION['user_id'] ?? 0)) {

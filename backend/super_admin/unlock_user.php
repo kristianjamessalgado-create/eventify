@@ -3,6 +3,7 @@ session_start();
 
 include __DIR__ . '/../../config/db.php';
 include __DIR__ . '/../../config/config.php';
+include __DIR__ . '/../../config/csrf.php';
 include __DIR__ . '/../../backend/lib/activity_logger.php';
 
 // Only super admin can unlock accounts
@@ -11,11 +12,16 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'super_admin') {
     exit();
 }
 
-// Validate user ID
-$id = $_GET['id'] ?? '';
+if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !csrf_validate()) {
+    header("Location: " . BASE_URL . "/backend/super_admin/dashboardsuperadmin.php?error=" . urlencode("Invalid request."));
+    exit();
+}
 
-if (!ctype_digit($id)) {
-    header("Location: dashboardsuperadmin.php?error=Invalid user ID");
+// Validate user ID
+$id = $_POST['id'] ?? '';
+
+if (!ctype_digit((string)$id)) {
+    header("Location: " . BASE_URL . "/backend/super_admin/dashboardsuperadmin.php?error=" . urlencode("Invalid user ID"));
     exit();
 }
 
@@ -36,5 +42,5 @@ log_activity($conn, $actorId, $actorRole, 'user_unlocked', 'user', (int)$id, $de
 
 $conn->close();
 
-header("Location: dashboardsuperadmin.php?success=Account unlocked successfully");
+header("Location: " . BASE_URL . "/backend/super_admin/dashboardsuperadmin.php?success=" . urlencode("Account unlocked successfully"));
 exit();

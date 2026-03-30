@@ -75,35 +75,330 @@ function toggleMobileNav() {
 
 document.addEventListener('DOMContentLoaded', function () {
     const hamburgerBtn = document.getElementById('hamburgerBtn');
+    const registerRoleSelectModal = document.getElementById('registerRoleSelectModal');
+    const registerDepartmentWrapModal = document.getElementById('registerDepartmentWrapModal');
+    const loginModalPassword = document.getElementById('loginModalPassword');
+    const toggleLoginModalPassword = document.getElementById('toggleLoginModalPassword');
+    const registerModalPassword = document.getElementById('registerModalPassword');
+    const registerModalConfirmPassword = document.getElementById('registerModalConfirmPassword');
+    const toggleRegisterModalPassword = document.getElementById('toggleRegisterModalPassword');
+    const toggleRegisterModalConfirmPassword = document.getElementById('toggleRegisterModalConfirmPassword');
+    const loginModalForm = document.getElementById('loginModalForm');
+    const registerModalForm = document.getElementById('registerModalForm');
+    const verifyModalForm = document.getElementById('verifyModalForm');
+    const verifyModalEmail = document.getElementById('verifyModalEmail');
+    const loginModalMessage = document.getElementById('loginModalMessage');
+    const registerModalMessage = document.getElementById('registerModalMessage');
+    const verifyModalMessage = document.getElementById('verifyModalMessage');
     if (hamburgerBtn) {
         hamburgerBtn.addEventListener('click', toggleMobileNav);
     }
 
-    // Login: on desktop open modal, on mobile follow link to full login page
+    if (registerRoleSelectModal && registerDepartmentWrapModal) {
+        const toggleDeptField = function () {
+            registerDepartmentWrapModal.style.display = registerRoleSelectModal.value === 'student' ? 'block' : 'none';
+        };
+        registerRoleSelectModal.addEventListener('change', toggleDeptField);
+        toggleDeptField();
+    }
+
+    function bindEyeToggle(buttonEl, inputEl) {
+        if (!buttonEl || !inputEl) return;
+        buttonEl.addEventListener('click', function () {
+            const show = inputEl.type === 'password';
+            inputEl.type = show ? 'text' : 'password';
+            buttonEl.setAttribute('aria-pressed', show ? 'true' : 'false');
+            buttonEl.textContent = show ? '🙈' : '👁';
+            inputEl.focus();
+        });
+    }
+
+    bindEyeToggle(toggleLoginModalPassword, loginModalPassword);
+    bindEyeToggle(toggleRegisterModalPassword, registerModalPassword);
+    bindEyeToggle(toggleRegisterModalConfirmPassword, registerModalConfirmPassword);
+
+    function setInlineMessage(el, type, text) {
+        if (!el) return;
+        if (!text) {
+            el.textContent = '';
+            el.style.display = 'none';
+            el.classList.remove('error', 'success');
+            return;
+        }
+        el.textContent = text;
+        el.classList.remove('error', 'success');
+        el.classList.add(type === 'success' ? 'success' : 'error');
+        el.style.display = 'block';
+    }
+
+    function clearAllModalMessages() {
+        setInlineMessage(loginModalMessage, '', '');
+        setInlineMessage(registerModalMessage, '', '');
+        setInlineMessage(verifyModalMessage, '', '');
+    }
+
+    function resolveFinalUrl(rawUrl) {
+        try {
+            return new URL(rawUrl, window.location.origin);
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function getRoleHomeUrl() {
+        var base = window.EVENTIFY_BASE_URL || '/school_events';
+        return base + '/index.php';
+    }
+
+    function safeNavigate(urlLike) {
+        var target = (typeof urlLike === 'string') ? urlLike : '';
+        if (!target || target.indexOf('[object') !== -1) {
+            window.location.href = getRoleHomeUrl();
+            return;
+        }
+        window.location.href = target;
+    }
+
+    function setFormSubmitting(formEl, submitting, label) {
+        if (!formEl) return;
+        var btn = formEl.querySelector('button[type="submit"]');
+        if (!btn) return;
+        if (submitting) {
+            if (!btn.dataset.originalText) btn.dataset.originalText = btn.textContent || 'Submit';
+            btn.disabled = true;
+            btn.textContent = label || 'Please wait...';
+        } else {
+            btn.disabled = false;
+            if (btn.dataset.originalText) btn.textContent = btn.dataset.originalText;
+        }
+    }
+
+    function extractRedirectFromAuthHtml(htmlText) {
+        if (typeof htmlText !== 'string' || htmlText === '') return '';
+        var m = htmlText.match(/window\.top\.location\.href\s*=\s*([^;]+);/i);
+        if (!m || !m[1]) return '';
+        var rhs = m[1].trim();
+        // Backend writes: window.top.location.href = "<url>";
+        // Try JSON parsing first so escaped slashes are decoded properly.
+        try {
+            var parsed = JSON.parse(rhs);
+            if (typeof parsed === 'string' && parsed) return parsed;
+        } catch (e) {
+            // ignore and try fallback below
+        }
+        // Fallback: strip quotes and unescape common slash escaping.
+        rhs = rhs.replace(/^['"]|['"]$/g, '').replace(/\\\//g, '/');
+        return rhs;
+    }
+
+    async function submitModalForm(formEl, onHandled) {
+        if (!formEl) return;
+        const body = new FormData(formEl);
+        const response = await fetch(formEl.action, {
+            method: 'POST',
+            body: body,
+            credentials: 'same-origin',
+            redirect: 'follow'
+        });
+        const finalUrl = resolveFinalUrl(response.url);
+        const responseText = await response.text();
+        if (onHandled) onHandled(finalUrl, response, responseText);
+    }
+
+    // Hard reliability fix: do NOT AJAX-submit login.
+    // Normal form submit ensures server session + role redirects always work.
+    if (loginModalForm) {
+        loginModalForm.addEventListener('submit', function () {
+            clearAllModalMessages();
+            setFormSubmitting(loginModalForm, true, 'Logging in...');
+        });
+    }
+
+    // Hard reliability fix for registration too: do normal submit.
+    // Backend already handles validation + redirects with clear error messages.
+    if (registerModalForm) {
+        registerModalForm.addEventListener('submit', function () {
+            clearAllModalMessages();
+            setFormSubmitting(registerModalForm, true, 'Registering...');
+        });
+    }
+
+    if (verifyModalForm) {
+        verifyModalForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+            clearAllModalMessages();
+            setFormSubmitting(verifyModalForm, true, 'Verifying...');
+            submitModalForm(verifyModalForm, function (finalUrl) {
+                if (!finalUrl) {
+                    setFormSubmitting(verifyModalForm, false);
+                    setInlineMessage(verifyModalMessage, 'error', 'Verification failed. Please try again.');
+                    return;
+                }
+                const p = finalUrl.pathname || '';
+                const q = finalUrl.searchParams;
+                if (p.indexOf('/views/verify_account_otp.php') !== -1 && q.get('error')) {
+                    setFormSubmitting(verifyModalForm, false);
+                    setInlineMessage(verifyModalMessage, 'error', q.get('error'));
+                    openVerifyModal();
+                    return;
+                }
+                if (p.indexOf('/views/login.php') !== -1) {
+                    setFormSubmitting(verifyModalForm, false);
+                    setInlineMessage(loginModalMessage, q.get('error') ? 'error' : 'success', q.get('error') || q.get('success') || 'Done.');
+                    openLoginModal();
+                    return;
+                }
+                safeNavigate(finalUrl.href);
+            }).catch(function () {
+                setFormSubmitting(verifyModalForm, false);
+                setInlineMessage(verifyModalMessage, 'error', 'Unable to connect. Please try again.');
+            });
+        });
+    }
+
+    // Re-open specific auth modal after backend redirect from form validation.
+    if (window.AUTH_MODAL === 'register') {
+        openRegisterModal();
+        var serverErrEl = document.getElementById('registerModalMessageServer');
+        if (window.AUTH_ERROR && registerModalMessage && !serverErrEl) {
+            setInlineMessage(registerModalMessage, 'error', window.AUTH_ERROR);
+        }
+        if (window.AUTH_ERROR && /password/i.test(window.AUTH_ERROR)) {
+            if (registerModalPassword) registerModalPassword.value = '';
+            if (registerModalConfirmPassword) registerModalConfirmPassword.value = '';
+        }
+    } else if (window.AUTH_MODAL === 'verify') {
+        openVerifyModal();
+        if (window.AUTH_ERROR && verifyModalMessage) {
+            setInlineMessage(verifyModalMessage, 'error', window.AUTH_ERROR);
+        }
+    } else if (window.AUTH_MODAL === 'login') {
+        openLoginModal();
+        var loginServerEl = document.getElementById('loginModalMessageServer');
+        if (!loginServerEl && window.AUTH_ERROR && loginModalMessage) {
+            setInlineMessage(loginModalMessage, 'error', window.AUTH_ERROR);
+        } else if (!loginServerEl && window.AUTH_SUCCESS && loginModalMessage) {
+            setInlineMessage(loginModalMessage, 'success', window.AUTH_SUCCESS);
+        }
+    }
+
+    function promptLogin(loginUrl) {
+        if (!loginUrl) return;
+        if (window.innerWidth > 768) {
+            openLoginModal();
+        } else {
+            window.location.href = loginUrl;
+        }
+    }
+
+    // Login: on desktop open modal, on mobile go to full login page
     document.querySelectorAll('.login-trigger').forEach(function (el) {
         el.addEventListener('click', function (e) {
+            var loginUrl = el.getAttribute('data-login-url');
             if (window.innerWidth > 768) {
+                // Desktop: show modal, do not leave landing page
                 e.preventDefault();
                 openLoginModal();
+            } else if (loginUrl) {
+                // Mobile: navigate to full login/register page
+                e.preventDefault();
+                window.location.href = loginUrl;
             }
         });
     });
+
+
+    // Public calendar: show events but require login on interaction
+    try {
+        var calEl = document.getElementById('publicCalendar');
+        var monthEl = document.getElementById('publicCalendarMonth');
+        if (calEl && window.FullCalendar) {
+            var events = Array.isArray(window.PUBLIC_CALENDAR_EVENTS) ? window.PUBLIC_CALENDAR_EVENTS : [];
+            var loginUrl = window.PUBLIC_LOGIN_URL || '';
+            var syncMonth = function (cal) {
+                if (!monthEl || !cal) return;
+                monthEl.textContent = (cal.view && cal.view.title) ? cal.view.title : monthEl.textContent;
+            };
+
+            var calendar = new FullCalendar.Calendar(calEl, {
+                initialView: 'dayGridMonth',
+                height: 'auto',
+                fixedWeekCount: false,
+                showNonCurrentDates: true,
+                navLinks: false,
+                selectable: false,
+                nowIndicator: true,
+                events: events,
+                dateClick: function () {
+                    promptLogin(loginUrl);
+                },
+                eventClick: function (info) {
+                    if (info && info.jsEvent) info.jsEvent.preventDefault();
+                    promptLogin(loginUrl);
+                },
+                datesSet: function () {
+                    syncMonth(calendar);
+                }
+            });
+            calendar.render();
+            syncMonth(calendar);
+        }
+    } catch (err) {
+        // ignore calendar init failures on landing
+    }
 });
 
 // ===============================
 // MODAL LOGIC
 // ===============================
 function openLoginModal() {
-    document.getElementById('loginModal').style.display = 'flex';
+    var modal = document.getElementById('loginModal');
+    var registerModal = document.getElementById('registerModal');
+    var verifyModal = document.getElementById('verifyModal');
+    if (registerModal) registerModal.style.display = 'none';
+    if (verifyModal) verifyModal.style.display = 'none';
+    if (modal) modal.style.display = 'flex';
 }
 
 function closeLoginModal() {
     document.getElementById('loginModal').style.display = 'none';
 }
 
+function openRegisterModal() {
+    var modal = document.getElementById('loginModal');
+    var registerModal = document.getElementById('registerModal');
+    var verifyModal = document.getElementById('verifyModal');
+    if (modal) modal.style.display = 'none';
+    if (verifyModal) verifyModal.style.display = 'none';
+    if (registerModal) registerModal.style.display = 'flex';
+}
+
+function closeRegisterModal() {
+    var registerModal = document.getElementById('registerModal');
+    if (registerModal) registerModal.style.display = 'none';
+}
+
+function openVerifyModal() {
+    var modal = document.getElementById('loginModal');
+    var registerModal = document.getElementById('registerModal');
+    var verifyModal = document.getElementById('verifyModal');
+    if (modal) modal.style.display = 'none';
+    if (registerModal) registerModal.style.display = 'none';
+    if (verifyModal) verifyModal.style.display = 'flex';
+}
+
+function closeVerifyModal() {
+    var verifyModal = document.getElementById('verifyModal');
+    if (verifyModal) verifyModal.style.display = 'none';
+}
+
 window.onclick = function(e) {
     const modal = document.getElementById('loginModal');
+    const registerModal = document.getElementById('registerModal');
+    const verifyModal = document.getElementById('verifyModal');
     if (e.target === modal) closeLoginModal();
+    if (e.target === registerModal) closeRegisterModal();
+    if (e.target === verifyModal) closeVerifyModal();
 }
 
 // ===============================

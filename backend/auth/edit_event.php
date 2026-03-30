@@ -3,6 +3,7 @@ session_start();
 include __DIR__ . '/../../config/db.php';
 include __DIR__ . '/../../config/config.php';
 include __DIR__ . '/../../config/csrf.php';
+include __DIR__ . '/../../config/departments.php';
 
 // Require organizer login
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'organizer') {
@@ -21,8 +22,15 @@ if ($event_id <= 0) {
     exit();
 }
 
-// Fetch event and ensure it belongs to this organizer
-$stmt = $conn->prepare("SELECT id, title, description, date, location, department FROM events WHERE id = ? AND organizer_id = ?");
+// Fetch event and ensure it belongs to this organizer (max_capacity if column exists)
+$stmt = $conn->prepare("SELECT id, title, description, date, location, department, max_capacity FROM events WHERE id = ? AND organizer_id = ?");
+if (!$stmt) {
+    $stmt = $conn->prepare("SELECT id, title, description, date, location, department FROM events WHERE id = ? AND organizer_id = ?");
+}
+if (!$stmt) {
+    header("Location: " . BASE_URL . "/backend/auth/dashboardorganizer.php?msg=" . urlencode("Database error."));
+    exit();
+}
 $stmt->bind_param("ii", $event_id, $session_user_id);
 $stmt->execute();
 $result = $stmt->get_result();
@@ -32,6 +40,10 @@ $stmt->close();
 if (!$event) {
     header("Location: " . BASE_URL . "/backend/auth/dashboardorganizer.php?msg=" . urlencode("Event not found or you do not have permission to edit it."));
     exit();
+}
+
+if (!array_key_exists('max_capacity', $event)) {
+    $event['max_capacity'] = null;
 }
 
 // Handle form submission (update)
@@ -45,6 +57,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $date        = $_POST['date'] ?? '';
     $location    = trim($_POST['location'] ?? '');
     $department  = $_POST['department'] ?? 'ALL';
+    $max_capacity_raw = trim($_POST['max_capacity'] ?? '');
+    $maxCapVal = null;
+    if ($max_capacity_raw !== '' && ctype_digit($max_capacity_raw)) {
+        $v = (int) $max_capacity_raw;
+        if ($v > 0) {
+            $maxCapVal = $v;
+        }
+    }
 
     if (empty($title)) {
         $error = "Title is required.";
@@ -71,17 +91,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($eventDate < $today) {
                 $error = "Event date cannot be in the past.";
             } else {
-                // Validate department value
-                $allowedDepartments = ['ALL', 'BSIT', 'BSHM', 'CONAHS', 'Senior High'];
-                if (!in_array($department, $allowedDepartments, true)) {
-                    $department = 'ALL';
-                }
+                // Validate department value from centralized config
+                $department = eventify_normalize_department($department);
 
-                $stmt = $conn->prepare("UPDATE events SET title = ?, description = ?, date = ?, location = ?, department = ? WHERE id = ? AND organizer_id = ?");
-                $stmt->bind_param("sssssii", $title, $description, $date, $location, $department, $event_id, $session_user_id);
+                $stmt = $conn->prepare("UPDATE events SET title = ?, description = ?, date = ?, location = ?, department = ?, max_capacity = ? WHERE id = ? AND organizer_id = ?");
+                if (!$stmt) {
+                    $stmt = $conn->prepare("UPDATE events SET title = ?, description = ?, date = ?, location = ?, department = ? WHERE id = ? AND organizer_id = ?");
+                    $stmt->bind_param("sssssii", $title, $description, $date, $location, $department, $event_id, $session_user_id);
+                } else {
+                    $stmt->bind_param("sssssiii", $title, $description, $date, $location, $department, $maxCapVal, $event_id, $session_user_id);
+                }
 
                 if ($stmt->execute()) {
                     $stmt->close();
+                    require_once __DIR__ . '/../lib/activity_logger.php';
+                    log_activity(
+                        $conn,
+                        (int) $session_user_id,
+                        'organizer',
+                        'event_updated',
+                        'event',
+                        $event_id,
+                        'Updated event: ' . $title
+                    );
                     $success = "Event updated successfully!";
                     header("Location: " . BASE_URL . "/backend/auth/dashboardorganizer.php?msg=" . urlencode($success));
                     exit();
@@ -99,6 +131,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $event['date']        = $date;
     $event['location']    = $location;
     $event['department']  = $department;
+    $event['max_capacity'] = $maxCapVal;
 }
 
 // Fetch organizer name for display
@@ -443,6 +476,21 @@ $stmt->close();
                             maxlength="100"
                         >
                     </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="max_capacity">Max attendees (RSVP cap)</label>
+                    <input
+                        type="number"
+                        id="max_capacity"
+                        name="max_capacity"
+                        class="form-control"
+                        min="1"
+                        max="50000"
+                        placeholder="Leave empty for unlimited"
+                        value="<?= htmlspecialchars(isset($event['max_capacity']) && $event['max_capacity'] !== null && $event['max_capacity'] !== '' ? (string)(int)$event['max_capacity'] : '') ?>"
+                    >
+                    <small class="text-muted d-block mt-1">Leave empty for no limit. Requires migration <code>school_events_high_value_features.sql</code> for the column.</small>
                 </div>
 
                 <div class="form-group">

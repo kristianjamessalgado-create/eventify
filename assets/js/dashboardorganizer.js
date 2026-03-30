@@ -1,5 +1,145 @@
 // Global calendar instance
 let calendar = null;
+const EVENTIFY_ROLE = (window.currentRole || 'organizer').toLowerCase();
+
+/**
+ * Fill event details modal from a FullCalendar EventApi (shared: calendar click, admin upcoming list).
+ */
+function eventifyFillAndShowEventDetails(event) {
+    if (!event) {
+        return;
+    }
+    const props = event.extendedProps || {};
+
+    const titleEl = document.getElementById('eventTitle');
+    if (titleEl) {
+        titleEl.textContent = event.title || 'Untitled event';
+    }
+
+    let dateStr = '';
+    if (event.start) {
+        const dOpts = { year: 'numeric', month: 'short', day: 'numeric' };
+        dateStr = event.start.toLocaleDateString(undefined, dOpts);
+        const tOpts = { hour: 'numeric', minute: '2-digit', hour12: true };
+        const startTime = event.start.toLocaleTimeString(undefined, tOpts);
+        let range = startTime;
+        if (event.end) {
+            const endTime = event.end.toLocaleTimeString(undefined, tOpts);
+            range = startTime + ' – ' + endTime;
+        }
+        dateStr += ' · ' + range;
+    }
+    const dateCell = document.getElementById('eventDate');
+    if (dateCell) {
+        dateCell.textContent = dateStr || (event.startStr || '');
+    }
+
+    const locEl = document.getElementById('eventLocation');
+    if (locEl) {
+        locEl.textContent = props.location || 'N/A';
+    }
+    const descEl = document.getElementById('eventDescription');
+    if (descEl) {
+        descEl.textContent = props.description || 'No description provided.';
+    }
+
+    const dept = (props.department || 'ALL');
+    const deptEl = document.getElementById('eventDepartment');
+    if (deptEl) {
+        deptEl.textContent = (dept === 'ALL') ? 'All Departments' : dept;
+    }
+
+    const orgEl = document.getElementById('eventOrganizer');
+    if (orgEl) {
+        orgEl.textContent = props.organizer || 'N/A';
+    }
+
+    const statusEl = document.getElementById('eventStatus');
+    const status = (props.status || 'active').toLowerCase();
+    if (statusEl) {
+        statusEl.textContent = status.charAt(0).toUpperCase() + status.slice(1);
+        if (status === 'active') {
+            statusEl.className = 'badge bg-success';
+        } else if (status === 'rejected') {
+            statusEl.className = 'badge bg-danger';
+        } else if (status === 'pending') {
+            statusEl.className = 'badge bg-warning text-dark';
+        } else {
+            statusEl.className = 'badge bg-secondary';
+        }
+    }
+
+    const rejectWrap = document.getElementById('eventRejectReasonWrap');
+    const rejectReasonEl = document.getElementById('eventRejectReason');
+    if (rejectWrap && rejectReasonEl) {
+        const reason = (props.reject_reason || '').trim();
+        if (status === 'rejected' && reason) {
+            rejectReasonEl.textContent = reason;
+            rejectWrap.style.display = 'block';
+        } else {
+            rejectWrap.style.display = 'none';
+        }
+    }
+
+    const createdEl = document.getElementById('eventCreatedAt');
+    if (createdEl) {
+        createdEl.textContent = props.created_at || 'N/A';
+    }
+
+    const editLink = document.getElementById('eventEditLink');
+    if (editLink) {
+        if (props.editUrl) {
+            editLink.href = props.editUrl;
+            editLink.style.display = 'inline-block';
+        } else {
+            editLink.style.display = 'none';
+        }
+    }
+
+    const qrLink = document.getElementById('eventQrLink');
+    if (qrLink) {
+        if (event.id) {
+            qrLink.href = BASE_URL + '/event_qr.php?id=' + event.id;
+            qrLink.style.display = 'inline-block';
+        } else {
+            qrLink.style.display = 'none';
+        }
+    }
+
+    const attendanceLink = document.getElementById('eventAttendanceLink');
+    if (attendanceLink) {
+        if (event.id) {
+            attendanceLink.href = BASE_URL + '/event_attendance.php?id=' + event.id;
+            attendanceLink.style.display = 'inline-block';
+        } else {
+            attendanceLink.style.display = 'none';
+        }
+    }
+
+    const modalEl = document.getElementById('eventDetailsModal');
+    if (modalEl && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+        const eventModal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        eventModal.show();
+    }
+}
+
+/**
+ * Open event details from calendar by id (e.g. admin upcoming modal).
+ */
+function eventifyOpenEventDetailsById(eventId) {
+    if (!calendar || eventId == null || eventId === '') {
+        return false;
+    }
+    const ev = calendar.getEventById(String(eventId));
+    if (ev) {
+        eventifyFillAndShowEventDetails(ev);
+        return true;
+    }
+    return false;
+}
+
+window.eventifyFillAndShowEventDetails = eventifyFillAndShowEventDetails;
+window.eventifyOpenEventDetailsById = eventifyOpenEventDetailsById;
 let currentDate = new Date();
 let selectedDate = new Date(); // highlighted day in mini calendar
 let selectedDepartment = 'ALL';
@@ -213,111 +353,47 @@ function initFullCalendar() {
             meridiem: 'short'
         },
 
-        // Click empty date -> create event
+        // Click empty date -> create event (organizer only)
         dateClick: function(info) {
-            window.location.href = BASE_URL + "/backend/auth/createevent.php?date=" + info.dateStr;
+            if (EVENTIFY_ROLE === 'organizer') {
+                window.location.href = BASE_URL + "/backend/auth/createevent.php?date=" + info.dateStr;
+            }
         },
 
         // Click existing event -> show details modal
         eventClick: function(info) {
-            const event = info.event;
-            const props = event.extendedProps || {};
-
-            // Fill modal content
-            document.getElementById('eventTitle').textContent = event.title || 'Untitled event';
-
-            // Format date + time range
-            let dateStr = '';
-            if (event.start) {
-                const dOpts = { year: 'numeric', month: 'short', day: 'numeric' };
-                dateStr = event.start.toLocaleDateString(undefined, dOpts);
-                const tOpts = { hour: 'numeric', minute: '2-digit', hour12: true };
-                const startTime = event.start.toLocaleTimeString(undefined, tOpts);
-                let range = startTime;
-                if (event.end) {
-                    const endTime = event.end.toLocaleTimeString(undefined, tOpts);
-                    range = startTime + ' – ' + endTime;
-                }
-                dateStr += ' · ' + range;
-            }
-            document.getElementById('eventDate').textContent = dateStr || (event.startStr || '');
-
-            document.getElementById('eventLocation').textContent = props.location || 'N/A';
-            document.getElementById('eventDescription').textContent = props.description || 'No description provided.';
-
-            // Department
-            const dept = (props.department || 'ALL');
-            document.getElementById('eventDepartment').textContent = (dept === 'ALL')
-                ? 'All Departments'
-                : dept;
-
-            // Organizer
-            document.getElementById('eventOrganizer').textContent = props.organizer || 'N/A';
-
-            // Status
-            const statusEl = document.getElementById('eventStatus');
-            const status = (props.status || 'active').toLowerCase();
-            statusEl.textContent = status.charAt(0).toUpperCase() + status.slice(1);
-            if (status === 'active') statusEl.className = 'badge bg-success';
-            else if (status === 'rejected') statusEl.className = 'badge bg-danger';
-            else if (status === 'pending') statusEl.className = 'badge bg-warning text-dark';
-            else statusEl.className = 'badge bg-secondary';
-
-            // Rejection reason (organizer sees why event was rejected)
-            const rejectWrap = document.getElementById('eventRejectReasonWrap');
-            const rejectReasonEl = document.getElementById('eventRejectReason');
-            if (rejectWrap && rejectReasonEl) {
-                const reason = (props.reject_reason || '').trim();
-                if (status === 'rejected' && reason) {
-                    rejectReasonEl.textContent = reason;
-                    rejectWrap.style.display = 'block';
-                } else {
-                    rejectWrap.style.display = 'none';
-                }
-            }
-
-            // Created at
-            document.getElementById('eventCreatedAt').textContent = props.created_at || 'N/A';
-
-            // Edit link
-            const editLink = document.getElementById('eventEditLink');
-            if (props.editUrl) {
-                editLink.href = props.editUrl;
-                editLink.style.display = 'inline-block';
-            } else {
-                editLink.style.display = 'none';
-            }
-
-            // Event QR link (check-in)
-            const qrLink = document.getElementById('eventQrLink');
-            if (qrLink && event.id) {
-                qrLink.href = BASE_URL + '/event_qr.php?id=' + event.id;
-                qrLink.style.display = 'inline-block';
-            } else if (qrLink) {
-                qrLink.style.display = 'none';
-            }
-
-            // Attendance link (view who checked in)
-            const attendanceLink = document.getElementById('eventAttendanceLink');
-            if (attendanceLink && event.id) {
-                attendanceLink.href = BASE_URL + '/event_attendance.php?id=' + event.id;
-                attendanceLink.style.display = 'inline-block';
-            } else if (attendanceLink) {
-                attendanceLink.style.display = 'none';
-            }
-
-            // Show modal
-            const modalEl = document.getElementById('eventDetailsModal');
-            const eventModal = new bootstrap.Modal(modalEl);
-            eventModal.show();
-
+            eventifyFillAndShowEventDetails(info.event);
             info.jsEvent.preventDefault();
         },
 
-        // Custom event rendering to add department data attribute
+        // Custom event rendering to add department + state attributes
         eventDidMount: function(info) {
             const dept = info.event.extendedProps?.department || 'ALL';
             info.el.setAttribute('data-dept', dept);
+            const status = String(info.event.extendedProps?.status || '').toLowerCase();
+            const start = info.event.start instanceof Date ? info.event.start : null;
+            const now = new Date();
+            let state = 'active';
+
+            if (status === 'closed' || status === 'completed') {
+                state = 'closed';
+            } else if (status === 'rejected') {
+                state = 'rejected';
+            } else if (start && start > now) {
+                state = 'upcoming';
+            } else {
+                state = 'active';
+            }
+            info.el.setAttribute('data-event-state', state);
+
+            // Force color at runtime to avoid CSS/cache conflicts.
+            let bg = '#16a34a'; // active
+            if (state === 'upcoming') bg = '#f59e0b';
+            if (state === 'closed') bg = '#6b7280';
+            if (state === 'rejected') bg = '#dc2626';
+            info.el.style.backgroundColor = bg;
+            info.el.style.borderColor = bg;
+            info.el.style.color = '#ffffff';
         },
 
         // Update title when view changes and sync mini calendar
@@ -336,6 +412,7 @@ function initFullCalendar() {
     });
 
     calendar.render();
+    window.eventifyCalendar = calendar;
 
     // Force initial sync (removes the hardcoded placeholder "September 2026")
     const focus = calendar.getDate ? calendar.getDate() : new Date();

@@ -1,5 +1,20 @@
 <?php
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    ini_set('session.cookie_httponly', 1);
+    ini_set('session.use_strict_mode', 1);
+    if (!headers_sent()) {
+        $secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
+        session_set_cookie_params([
+            'lifetime' => 0,
+            'path'     => '/',
+            'domain'   => '',
+            'secure'   => $secure,
+            'httponly' => true,
+            'samesite' => 'Lax',
+        ]);
+    }
+    session_start();
+}
 // In production, keep errors out of the browser (log them instead)
 ini_set('display_errors', 0);
 error_reporting(E_ALL);
@@ -9,6 +24,7 @@ include __DIR__ . '/../../config/db.php';
 include __DIR__ . '/../../config/config.php'; // For BASE_URL
 include __DIR__ . '/../../config/csrf.php';
 include __DIR__ . '/../lib/activity_logger.php';
+include __DIR__ . '/../lib/account_email_otp.php';
 
 // Allowed departments for students (must match form options)
 $allowedDepartments = [
@@ -26,7 +42,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
     if (!csrf_validate()) {
-        header("Location: " . BASE_URL . "/views/login.php?error=" . urlencode("Invalid request. Please try again.") . "&form=" . ($action === 'register' ? 'register' : 'login'));
+        if ($action === 'register') {
+            header("Location: " . BASE_URL . "/index.php?auth_modal=register&auth_error=" . urlencode("Invalid request. Please try again."));
+        } else {
+            header("Location: " . BASE_URL . "/views/login.php?error=" . urlencode("Invalid request. Please try again.") . "&form=login");
+        }
         exit();
     }
 
@@ -79,35 +99,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $prefix = strtoupper(substr($role, 0, 3));
                 }
                 $user_id = $prefix . '-' . rand(100, 999);
-                // Multimedia and admin accounts must be approved by super admin first
-                $status = in_array($role, ['multimedia', 'admin'], true) ? 'inactive' : 'active';
-
-                $insert = $conn->prepare(
-                    "INSERT INTO users (user_id, name, email, password, role, department, status)
-                     VALUES (?, ?, ?, ?, ?, ?, ?)"
+                $otpCreate = eventify_create_email_otp(
+                    $conn,
+                    'register',
+                    $email,
+                    null,
+                    [
+                        'name' => $name,
+                        'password_hash' => $hashed_password,
+                        'role' => $role,
+                        'department' => $department,
+                        'user_code' => $user_id,
+                    ],
+                    10
                 );
-                $insert->bind_param("sssssss", $user_id, $name, $email, $hashed_password, $role, $department, $status);
-
-                if ($insert->execute()) {
-                    if ($role === 'multimedia' || $role === 'admin') {
-                        $success = "Registration submitted. Please wait for super admin approval before logging in.";
-                    } else {
-                        $success = "Registration successful! You can now login.";
-                    }
-                    header("Location: " . BASE_URL . "/views/login.php?success=" . urlencode($success) . "&form=register");
-                    exit();
+                if (empty($otpCreate['ok'])) {
+                    $error = "Registration failed. OTP could not be generated.";
                 } else {
-                    $error = "Registration failed. Please try again.";
+                    $sendRes = eventify_send_account_otp_email($email, 'register', (string)$otpCreate['code']);
+                    if (empty($sendRes['ok'])) {
+                        $error = "Registration OTP email failed: " . ($sendRes['error'] ?? 'unknown error');
+                    } else {
+                        $success = "Registration OTP sent. After verification, your account will be pending super admin approval.";
+                        header("Location: " . BASE_URL . "/views/verify_account_otp.php?purpose=register&email=" . urlencode($email) . "&success=" . urlencode($success));
+                        exit();
+                    }
                 }
-
-                $insert->close();
             }
 
             $stmt->close();
         }
 
         if (!empty($error)) {
-            header("Location: " . BASE_URL . "/views/login.php?error=" . urlencode($error) . "&form=register");
+            header("Location: " . BASE_URL . "/index.php?auth_modal=register&auth_error=" . urlencode($error));
             exit();
         }
 
@@ -127,7 +151,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $user = $result->fetch_assoc();
 
             if ($user['status'] !== 'active') {
-                $error = "Account is inactive. Contact admin.";
+                $failedAttempts = (int) ($user['failed_attempts'] ?? 0);
+                if ($failedAttempts >= 5) {
+                    // Locked account: OTP reactivation flow is allowed.
+                    $redirect = BASE_URL . "/views/login.php?error=" . urlencode("Account is locked. Request OTP reactivation below.") . "&form=login&reactivate_email=" . urlencode($email);
+                    header("Location: " . $redirect);
+                    exit();
+                }
+                // New/pending inactive account: no OTP reactivation until super admin approves.
+                $error = "Account is pending super admin approval.";
             } else {
                 $stored = $user['password'];
                 $password_ok = false;
@@ -209,6 +241,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     // Only allow same-origin redirect (prevent open redirect)
                     if ($user['role'] === 'student' && !empty($_POST['redirect'])) {
                         $redirect = trim($_POST['redirect']);
+                        // Defensive: reject malformed non-URL-ish values (e.g. "[object HTMLInputElement]").
+                        if ($redirect === '' || stripos($redirect, '[object') === 0) {
+                            $redirect = '';
+                        }
                         $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
                         $host = $_SERVER['HTTP_HOST'] ?? '';
                         $allowed_prefix = $scheme . '://' . $host . BASE_URL;
@@ -224,24 +260,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         exit();
                     }
 
-                    // Use server-side redirect when we have a custom URL (e.g. check-in page) so session cookie is sent on mobile
-                    if ($user['role'] === 'student' && $redirectUrl !== '' && $redirectUrl !== (BASE_URL . "/backend/auth/dashboard_student.php")) {
-                        $loc = $redirectUrl;
-                        if (strpos($loc, 'http') !== 0) {
-                            $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-                            $host = $_SERVER['HTTP_HOST'] ?? '';
-                            $loc = $scheme . '://' . $host . (strpos($loc, '/') === 0 ? $loc : BASE_URL . '/' . $loc);
-                        }
-                        header('Location: ' . $loc);
-                        exit();
+                    // Enforce immediate password change when account is flagged.
+                    $mustChangePassword = ((int)($user['must_change_password'] ?? 0) === 1);
+                    if ($mustChangePassword) {
+                        $redirectUrl = BASE_URL . "/views/change_password.php?from=required&next=" . urlencode($redirectUrl);
                     }
 
-                    // Break out of iframe (modal) and redirect full page for default dashboard
-                    echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Redirecting...</title></head><body>';
-                    echo '<script>';
-                    echo 'window.top.location.href = ' . json_encode($redirectUrl) . ';';
-                    echo '</script>';
-                    echo '</body></html>';
+                    // Always return a normal HTTP redirect after successful login.
+                    // This is reliable for both full-page and fetch-based modal login flows.
+                    $loc = $redirectUrl;
+                    if (strpos($loc, 'http') !== 0) {
+                        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+                        $host = $_SERVER['HTTP_HOST'] ?? '';
+                        $loc = $scheme . '://' . $host . (strpos($loc, '/') === 0 ? $loc : BASE_URL . '/' . $loc);
+                    }
+                    header('Location: ' . $loc);
                     exit();
                 }
             }

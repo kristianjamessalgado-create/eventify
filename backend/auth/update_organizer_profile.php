@@ -19,6 +19,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit();
     }
     $name  = trim($_POST['name'] ?? '');
+    $organizerContactEmail = trim($_POST['organizer_contact_email'] ?? '');
+    $organizerPhone = trim($_POST['organizer_phone'] ?? '');
+    $organizerContactMethod = $_POST['organizer_contact_method'] ?? 'email';
     $error = '';
     $profilePicturePath = null;
 
@@ -26,6 +29,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = "Full name is required.";
     } elseif (strlen($name) > 100) {
         $error = "Full name must be 100 characters or less.";
+    }
+
+    if (!in_array($organizerContactMethod, ['email', 'phone'], true)) {
+        $organizerContactMethod = 'email';
+    }
+    if ($organizerContactEmail !== '' && !filter_var($organizerContactEmail, FILTER_VALIDATE_EMAIL)) {
+        $error = "Verification email is invalid.";
+    }
+    if ($organizerPhone !== '' && !preg_match('/^[0-9+\-\s()]{7,25}$/', $organizerPhone)) {
+        $error = "Verification phone number format is invalid.";
+    }
+    if ($error === '' && $organizerContactMethod === 'phone' && $organizerPhone === '') {
+        $error = "Please provide a phone number for OTP verification.";
+    }
+    if ($error === '' && $organizerContactMethod === 'email' && $organizerContactEmail === '') {
+        $error = "Please provide a verification email for OTP verification.";
     }
 
     // Handle profile picture upload (optional)
@@ -83,13 +102,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit();
     }
 
-    // Update name and optionally profile picture
+    $hasContactColumns = false;
+    try {
+        $colCheck = $conn->query("SHOW COLUMNS FROM users WHERE Field IN ('organizer_contact_email','organizer_phone','organizer_contact_method')");
+        $hasContactColumns = (bool) ($colCheck && $colCheck->num_rows >= 3);
+    } catch (Throwable $e) {
+        $hasContactColumns = false;
+    }
+
+    // Update name and optionally profile picture + contact fields
     if ($profilePicturePath !== null) {
-        $stmt = $conn->prepare("UPDATE users SET name = ?, profile_picture = ? WHERE id = ?");
-        $stmt->bind_param("ssi", $name, $profilePicturePath, $userId);
+        if ($hasContactColumns) {
+            $stmt = $conn->prepare("UPDATE users SET name = ?, profile_picture = ?, organizer_contact_email = ?, organizer_phone = ?, organizer_contact_method = ? WHERE id = ?");
+            $stmt->bind_param("sssssi", $name, $profilePicturePath, $organizerContactEmail, $organizerPhone, $organizerContactMethod, $userId);
+        } else {
+            $stmt = $conn->prepare("UPDATE users SET name = ?, profile_picture = ? WHERE id = ?");
+            $stmt->bind_param("ssi", $name, $profilePicturePath, $userId);
+        }
     } else {
-        $stmt = $conn->prepare("UPDATE users SET name = ? WHERE id = ?");
-        $stmt->bind_param("si", $name, $userId);
+        if ($hasContactColumns) {
+            $stmt = $conn->prepare("UPDATE users SET name = ?, organizer_contact_email = ?, organizer_phone = ?, organizer_contact_method = ? WHERE id = ?");
+            $stmt->bind_param("ssssi", $name, $organizerContactEmail, $organizerPhone, $organizerContactMethod, $userId);
+        } else {
+            $stmt = $conn->prepare("UPDATE users SET name = ? WHERE id = ?");
+            $stmt->bind_param("si", $name, $userId);
+        }
     }
 
     if ($stmt) {
@@ -100,6 +137,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $successMsg = ($profilePicturePath !== null)
             ? "Profile and picture updated successfully."
             : "Profile updated successfully.";
+        if (!$hasContactColumns) {
+            $successMsg .= " Run school_events_event_approval_otp.sql to enable OTP contact fields.";
+        }
 
         header("Location: " . BASE_URL . "/backend/auth/dashboardorganizer.php?msg=" . urlencode($successMsg));
         exit();

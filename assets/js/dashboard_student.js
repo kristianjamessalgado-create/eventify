@@ -282,7 +282,7 @@ function initFullCalendar() {
         headerToolbar: false, // We use custom controls
         events: window.studentEvents || [],
         eventDisplay: 'block',
-        height: '100%',
+        height: 'auto',
         contentHeight: 'auto',
         dayHeaderFormat: window.matchMedia('(max-width: 768px)').matches ? { weekday: 'short' } : { weekday: 'long' },
         firstDay: 0,
@@ -305,6 +305,29 @@ function initFullCalendar() {
         eventDidMount: function(info) {
             const dept = info.event.extendedProps?.department || 'ALL';
             info.el.setAttribute('data-dept', dept);
+            const status = String(info.event.extendedProps?.status || '').toLowerCase();
+            const start = info.event.start instanceof Date ? info.event.start : null;
+            const now = new Date();
+            let state = 'active';
+
+            if (status === 'closed' || status === 'completed') {
+                state = 'closed';
+            } else if (status === 'rejected') {
+                state = 'rejected';
+            } else if (start && start > now) {
+                state = 'upcoming';
+            } else {
+                state = 'active';
+            }
+            info.el.setAttribute('data-event-state', state);
+
+            let bg = '#16a34a';
+            if (state === 'upcoming') bg = '#f59e0b';
+            if (state === 'closed') bg = '#6b7280';
+            if (state === 'rejected') bg = '#dc2626';
+            info.el.style.backgroundColor = bg;
+            info.el.style.borderColor = bg;
+            info.el.style.color = '#ffffff';
         },
 
         // Update title when view changes and sync mini calendar
@@ -379,13 +402,89 @@ function showStudentEventDetails(eventLike) {
         dateStr += ' · ' + range;
     }
 
+    const eventYmd = props.event_date_ymd || '';
+    const todayY = todayYmdLocal();
+    const isPast = eventYmd !== '' && eventYmd < todayY;
+
+    const maxCap = props.max_capacity != null && props.max_capacity !== '' ? parseInt(props.max_capacity, 10) : null;
+    const regCount = parseInt(props.registration_count, 10) || 0;
+    const isRegistered = !!props.is_registered;
+    const hasFeedback = !!props.has_feedback;
+    const eventId = props.event_id || eventLike.id;
+    const csrf = window.csrfToken || '';
+    const base = (window.BASE_URL || '').replace(/\/$/, '');
+
+    let capacityHtml = '';
+    if (maxCap != null && !isNaN(maxCap) && maxCap > 0) {
+        capacityHtml = '<p class="mb-2"><strong>RSVPs:</strong> ' + regCount + ' / ' + maxCap + '</p>';
+    } else {
+        capacityHtml = '<p class="mb-2"><strong>RSVPs:</strong> ' + regCount + ' registered (no cap)</p>';
+    }
+
+    let actionHtml = '';
+    const isFull = maxCap != null && !isNaN(maxCap) && maxCap > 0 && regCount >= maxCap;
+
+    if (!isPast) {
+        if (isRegistered) {
+            actionHtml = '<p class="mb-2 text-success small"><i class="fas fa-check-circle me-1"></i>You are registered for this event.</p>';
+            if (eventId && csrf) {
+                actionHtml += '<form method="post" action="' + escapeHtmlStudent(base + '/backend/auth/cancel_event_rsvp.php') + '" class="mt-2" onsubmit="return confirm(\'Cancel your RSVP for this event?\');">' +
+                    '<input type="hidden" name="csrf_token" value="' + escapeHtmlStudent(csrf) + '">' +
+                    '<input type="hidden" name="event_id" value="' + escapeHtmlStudent(String(eventId)) + '">' +
+                    '<button type="submit" class="btn btn-outline-danger btn-sm"><i class="fas fa-user-minus me-1"></i>Cancel RSVP</button>' +
+                    '</form>';
+            }
+        } else if (isFull) {
+            actionHtml = '<p class="mb-2 text-warning small mb-0">This event is full.</p>';
+        } else if (eventId && csrf) {
+            actionHtml = '<form method="post" action="' + escapeHtmlStudent(base + '/backend/auth/register_event_rsvp.php') + '" class="mt-3">' +
+                '<input type="hidden" name="csrf_token" value="' + escapeHtmlStudent(csrf) + '">' +
+                '<input type="hidden" name="event_id" value="' + escapeHtmlStudent(String(eventId)) + '">' +
+                '<button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-user-plus me-1"></i>RSVP / Register</button>' +
+                '</form>';
+        } else {
+            actionHtml = '<p class="mb-0 small text-muted">RSVP unavailable (refresh the page).</p>';
+        }
+    } else if (isRegistered) {
+        if (!hasFeedback && eventId && csrf) {
+            actionHtml = '<hr class="my-3">' +
+                '<h6 class="small text-uppercase text-muted mb-2">Post-event feedback</h6>' +
+                '<form method="post" action="' + escapeHtmlStudent(base + '/backend/auth/submit_event_feedback.php') + '">' +
+                '<input type="hidden" name="csrf_token" value="' + escapeHtmlStudent(csrf) + '">' +
+                '<input type="hidden" name="event_id" value="' + escapeHtmlStudent(String(eventId)) + '">' +
+                '<div class="mb-2">' +
+                '<label class="form-label small">Rating (1–5)</label>' +
+                '<select name="rating" class="form-select form-select-sm" required>' +
+                '<option value="">Choose…</option>' +
+                '<option value="5">5 – Excellent</option>' +
+                '<option value="4">4</option>' +
+                '<option value="3">3</option>' +
+                '<option value="2">2</option>' +
+                '<option value="1">1 – Poor</option>' +
+                '</select></div>' +
+                '<div class="mb-2">' +
+                '<label class="form-label small">Comment (optional)</label>' +
+                '<textarea name="comment" class="form-control form-control-sm" rows="2" maxlength="2000" placeholder="What did you think?"></textarea>' +
+                '</div>' +
+                '<button type="submit" class="btn btn-outline-primary btn-sm">Submit feedback</button>' +
+                '</form>';
+        } else if (hasFeedback) {
+            actionHtml = '<p class="mb-0 small text-muted mt-2"><i class="fas fa-check me-1"></i>Thanks — you already submitted feedback.</p>';
+        }
+    } else {
+        actionHtml = '<p class="mb-0 small text-muted">This event has ended. Only registered attendees can leave feedback.</p>';
+    }
+
+    const title = eventLike.title || 'Untitled';
     const bodyEl = document.getElementById('eventDetailsModalBody');
     if (bodyEl) {
-        bodyEl.innerHTML = '<p class="mb-2"><strong>Event:</strong> ' + (eventLike.title || 'Untitled') + '</p>' +
-            '<p class="mb-2"><strong>Date &amp; Time:</strong> ' + (dateStr || 'TBA') + '</p>' +
-            '<p class="mb-2"><strong>Location:</strong> ' + (props.location || 'N/A') + '</p>' +
-            '<p class="mb-2"><strong>Department:</strong> ' + deptText + '</p>' +
-            '<p class="mb-0"><strong>Description:</strong> ' + (props.description || 'No description provided.') + '</p>';
+        bodyEl.innerHTML = '<p class="mb-2"><strong>Event:</strong> ' + escapeHtmlStudent(title) + '</p>' +
+            '<p class="mb-2"><strong>Date &amp; Time:</strong> ' + escapeHtmlStudent(dateStr || 'TBA') + '</p>' +
+            '<p class="mb-2"><strong>Location:</strong> ' + escapeHtmlStudent(props.location || 'N/A') + '</p>' +
+            '<p class="mb-2"><strong>Department:</strong> ' + escapeHtmlStudent(deptText) + '</p>' +
+            capacityHtml +
+            '<p class="mb-2"><strong>Description:</strong> ' + escapeHtmlStudent(props.description || 'No description provided.') + '</p>' +
+            actionHtml;
     }
     const modalEl = document.getElementById('eventDetailsModal');
     if (modalEl && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
@@ -516,3 +615,21 @@ window.addEventListener('click', function(event) {
 
 // Get BASE_URL from window or set default
 const BASE_URL = window.BASE_URL || '/school_events';
+
+function escapeHtmlStudent(s) {
+    if (s == null || s === undefined) {
+        return '';
+    }
+    return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+function todayYmdLocal() {
+    var d = new Date();
+    var m = String(d.getMonth() + 1).padStart(2, '0');
+    var day = String(d.getDate()).padStart(2, '0');
+    return d.getFullYear() + '-' + m + '-' + day;
+}

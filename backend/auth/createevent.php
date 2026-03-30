@@ -3,6 +3,7 @@ session_start();
 include __DIR__ . '/../../config/db.php';
 include __DIR__ . '/../../config/config.php';
 include __DIR__ . '/../../config/csrf.php';
+include __DIR__ . '/../../config/departments.php';
 
 // Check if user is logged in as organizer
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'organizer') {
@@ -13,6 +14,26 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'organizer') {
 $session_user_id = $_SESSION['user_id'];
 $error = '';
 $success = '';
+
+$eventsHasGeo = false;
+try {
+    $geoColCheck = $conn->query("SHOW COLUMNS FROM events WHERE Field IN ('latitude','longitude')");
+    if ($geoColCheck && $geoColCheck->num_rows >= 2) {
+        $eventsHasGeo = true;
+    }
+} catch (Throwable $e) {
+    $eventsHasGeo = false;
+}
+
+$eventsHasMaxCapacity = false;
+try {
+    $mcCol = $conn->query("SHOW COLUMNS FROM events WHERE Field = 'max_capacity'");
+    if ($mcCol && $mcCol->num_rows >= 1) {
+        $eventsHasMaxCapacity = true;
+    }
+} catch (Throwable $e) {
+    $eventsHasMaxCapacity = false;
+}
 
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -27,6 +48,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $end_time = $_POST['end_time'] ?? '';
     $location = trim($_POST['location'] ?? '');
     $department = $_POST['department'] ?? 'ALL';
+    $max_capacity_raw = trim($_POST['max_capacity'] ?? '');
+    $maxCapVal = null;
+    if ($max_capacity_raw !== '' && ctype_digit($max_capacity_raw)) {
+        $v = (int) $max_capacity_raw;
+        if ($v > 0) {
+            $maxCapVal = $v;
+        }
+    }
     
     // Validation
     if (empty($title)) {
@@ -39,8 +68,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = "Location is required.";
     } elseif (strlen($title) > 150) {
         $error = "Title must be 150 characters or less.";
-    } elseif (strlen($location) > 100) {
-        $error = "Location must be 100 characters or less.";
+    } elseif (strlen($location) > 255) {
+        $error = "Location must be 255 characters or less.";
     } else {
         // Validate date format
         $dateObj = DateTime::createFromFormat('Y-m-d', $date);
@@ -69,43 +98,124 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $eventDate = new DateTime($date);
             $eventDate->setTime(0, 0, 0);
             
-            if (!$error && $eventDate < $today) {
+            if ($eventDate < $today) {
                 $error = "Event date cannot be in the past.";
-            } else {
-                // Validate department value (include all configured departments)
-                $allowedDepartments = [
-                    'ALL',
-                    'BSIT',
-                    'BSHM',
-                    'CONAHS',
-                    'Senior High',
-                    'High school department',
-                    'College of Communication, Information and Technology',
-                    'College of Accountancy and Business',
-                    'School of Law and Political Science',
-                    'College of Education',
-                    'College of Nursing and Allied health sciences',
-                    'College of Hospitality Management'
-                ];
-                if (!in_array($department, $allowedDepartments, true)) {
-                    $department = 'ALL';
+            }
+
+            if (!$error) {
+                $department = eventify_normalize_department($department);
+
+                $latVal = null;
+                $lngVal = null;
+                if ($eventsHasGeo) {
+                    $latRaw = trim($_POST['event_latitude'] ?? '');
+                    $lngRaw = trim($_POST['event_longitude'] ?? '');
+                    if ($latRaw === '' || $lngRaw === '' || !is_numeric($latRaw) || !is_numeric($lngRaw)) {
+                        $error = 'Please set the venue on the map, use “Use my location”, or search and pick a result.';
+                    } else {
+                        $latVal = (float) $latRaw;
+                        $lngVal = (float) $lngRaw;
+                        if ($latVal < -90 || $latVal > 90 || $lngVal < -180 || $lngVal > 180) {
+                            $error = 'Invalid map coordinates.';
+                        }
+                    }
                 }
 
-                // Insert event into database as pending (requires admin approval); include unique token for QR check-in
-                $checkin_token = bin2hex(random_bytes(16));
-                $stmt = $conn->prepare("INSERT INTO events (title, description, date, start_time, end_time, location, organizer_id, department, status, checkin_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)");
-                $start_time_param = $start_time ?: null;
-                $end_time_param = $end_time !== '' ? $end_time : null;
-                $stmt->bind_param("ssssssiss", $title, $description, $date, $start_time_param, $end_time_param, $location, $session_user_id, $department, $checkin_token);
-                
-                if ($stmt->execute()) {
-                    $success = "Event submitted successfully and is now pending approval from the administrator.";
-                    header("Location: " . BASE_URL . "/backend/auth/dashboardorganizer.php?msg=" . urlencode($success));
-                    exit();
-                } else {
-                    $error = "Failed to create event. Please try again.";
+                if (!$error) {
+                    $checkin_token = bin2hex(random_bytes(16));
+                    $start_time_param = $start_time ?: null;
+                    $end_time_param = $end_time !== '' ? $end_time : null;
+                    $executed = false;
+
+                    if ($eventsHasGeo && $latVal !== null && $lngVal !== null) {
+                        if ($eventsHasMaxCapacity) {
+                            $stmt = $conn->prepare("INSERT INTO events (title, description, date, start_time, end_time, location, latitude, longitude, max_capacity, organizer_id, department, status, checkin_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)");
+                            if ($stmt) {
+                                $stmt->bind_param("ssssssddiiss", $title, $description, $date, $start_time_param, $end_time_param, $location, $latVal, $lngVal, $maxCapVal, $session_user_id, $department, $checkin_token);
+                                if ($stmt->execute()) {
+                                    $executed = true;
+                                }
+                                $stmt->close();
+                            }
+                        }
+                        if (!$executed) {
+                            $stmt = $conn->prepare("INSERT INTO events (title, description, date, start_time, end_time, location, latitude, longitude, organizer_id, department, status, checkin_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)");
+                            if ($stmt) {
+                                $stmt->bind_param("ssssssddiss", $title, $description, $date, $start_time_param, $end_time_param, $location, $latVal, $lngVal, $session_user_id, $department, $checkin_token);
+                                if ($stmt->execute()) {
+                                    $executed = true;
+                                }
+                                $stmt->close();
+                            }
+                        }
+                    }
+
+                    if (!$executed && !$eventsHasGeo) {
+                        if ($eventsHasMaxCapacity) {
+                            $stmt = $conn->prepare("INSERT INTO events (title, description, date, start_time, end_time, location, max_capacity, organizer_id, department, status, checkin_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)");
+                            if ($stmt) {
+                                $stmt->bind_param("ssssssiiss", $title, $description, $date, $start_time_param, $end_time_param, $location, $maxCapVal, $session_user_id, $department, $checkin_token);
+                                if ($stmt->execute()) {
+                                    $executed = true;
+                                }
+                                $stmt->close();
+                            }
+                        }
+                        if (!$executed) {
+                            $stmt = $conn->prepare("INSERT INTO events (title, description, date, start_time, end_time, location, organizer_id, department, status, checkin_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)");
+                            if ($stmt) {
+                                $stmt->bind_param("ssssssiss", $title, $description, $date, $start_time_param, $end_time_param, $location, $session_user_id, $department, $checkin_token);
+                                if ($stmt->execute()) {
+                                    $executed = true;
+                                }
+                                $stmt->close();
+                            }
+                        }
+                    }
+
+                    if ($executed) {
+                        $newEventId = (int) $conn->insert_id;
+                        require_once __DIR__ . '/../lib/activity_logger.php';
+                        log_activity(
+                            $conn,
+                            (int) $session_user_id,
+                            'organizer',
+                            'event_submitted_pending',
+                            'event',
+                            $newEventId,
+                            'Submitted for admin approval: ' . $title
+                        );
+                        try {
+                            $who = $conn->query("SELECT id FROM users WHERE role IN ('admin','super_admin') AND status = 'active'");
+                            if ($who) {
+                                $notifTitle = 'New event pending approval';
+                                $notifMsg = 'Organizer submitted "' . $title . '" for approval.';
+                                $insNotif = $conn->prepare("INSERT INTO notifications (user_id, type, title, message, event_id) VALUES (?, 'event_pending_review', ?, ?, ?)");
+                                if ($insNotif) {
+                                    while ($adm = $who->fetch_assoc()) {
+                                        $adminId = (int) ($adm['id'] ?? 0);
+                                        if ($adminId > 0) {
+                                            $insNotif->bind_param("issi", $adminId, $notifTitle, $notifMsg, $newEventId);
+                                            $insNotif->execute();
+                                        }
+                                    }
+                                    $insNotif->close();
+                                }
+                            }
+                        } catch (Throwable $e) {
+                            // ignore
+                        }
+                        $success = "Event submitted successfully and is now pending approval from the administrator.";
+                        header("Location: " . BASE_URL . "/backend/auth/dashboardorganizer.php?msg=" . urlencode($success));
+                        exit();
+                    }
+
+                    if ($eventsHasGeo) {
+                        $error = 'Could not save event with map location. Check database migration (latitude/longitude columns).';
+                    } else {
+                        $error = "Failed to create event. Please try again.";
+                    }
                 }
-                $stmt->close();
             }
         }
     }
@@ -132,6 +242,8 @@ $stmt->close();
     
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
     
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css">
@@ -344,35 +456,20 @@ $stmt->close();
             padding-left: 45px;
         }
 
-                /* Location autocomplete dropdown (no API) */
-                .location-suggestions {
-                    position: absolute;
-                    top: 100%;
-                    left: 0;
-                    right: 0;
-                    background: #ffffff;
-                    border: 1px solid #dadce0;
-                    border-top: none;
-                    max-height: 200px;
-                    overflow-y: auto;
-                    border-radius: 0 0 8px 8px;
-                    box-shadow: 0 8px 20px rgba(0,0,0,0.08);
-                    z-index: 20;
-                    display: none;
-                }
+        .event-location-map {
+            height: 280px;
+            border-radius: 8px;
+            border: 1px solid #dadce0;
+            overflow: hidden;
+            z-index: 0;
+        }
 
-                .location-suggestion-item {
-                    padding: 8px 14px;
-                    font-size: 13px;
-                    cursor: pointer;
-                    white-space: nowrap;
-                    text-overflow: ellipsis;
-                    overflow: hidden;
-                }
-
-                .location-suggestion-item:hover {
-                    background: #f1f3f4;
-                }
+        .event-loc-results {
+            max-height: 160px;
+            overflow-y: auto;
+            border-radius: 8px;
+            z-index: 2;
+        }
         
         @media (max-width: 768px) {
             .create-event-body {
@@ -417,7 +514,7 @@ $stmt->close();
                 </div>
             <?php endif; ?>
             
-            <form method="POST" action="" id="createEventForm">
+            <form method="POST" action="" id="createEventForm" data-require-geo="<?= $eventsHasGeo ? '1' : '0' ?>">
                 <div class="form-group">
                     <label for="title">
                         Event Title <span class="required">*</span>
@@ -467,29 +564,88 @@ $stmt->close();
                         >
                     </div>
                 </div>
+
+                <div class="form-group">
+                    <label for="start_time">
+                        Start time <span class="required">*</span>
+                    </label>
+                    <div class="input-icon">
+                        <i class="fas fa-clock"></i>
+                        <input
+                            type="time"
+                            id="start_time"
+                            name="start_time"
+                            class="form-control"
+                            value="<?= htmlspecialchars($_POST['start_time'] ?? '') ?>"
+                            required
+                        >
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="end_time">End time</label>
+                    <div class="input-icon">
+                        <i class="fas fa-clock"></i>
+                        <input
+                            type="time"
+                            id="end_time"
+                            name="end_time"
+                            class="form-control"
+                            value="<?= htmlspecialchars($_POST['end_time'] ?? '') ?>"
+                        >
+                    </div>
+                    <small class="text-muted d-block mt-1">Optional — leave blank if the event has no fixed end time.</small>
+                </div>
                 
                 <div class="form-group">
                     <label for="location">
                         Location <span class="required">*</span>
                     </label>
-                    <div class="input-icon" style="position: relative;">
+                    <p class="text-muted" style="font-size: 13px; margin-bottom: 10px;">
+                        Search OpenStreetMap, click the map, or use your current location. The pin sets GPS coordinates for the venue.
+                    </p>
+                    <input type="hidden" name="event_latitude" id="event_latitude" value="<?= htmlspecialchars($_POST['event_latitude'] ?? '') ?>">
+                    <input type="hidden" name="event_longitude" id="event_longitude" value="<?= htmlspecialchars($_POST['event_longitude'] ?? '') ?>">
+                    <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px;">
+                        <input type="search" id="eventLocSearch" class="form-control" style="flex: 1; min-width: 200px;" placeholder="Search place or address" autocomplete="off">
+                        <button type="button" class="btn btn-secondary" id="eventLocSearchBtn" style="white-space: nowrap;">Search</button>
+                        <button type="button" class="btn btn-primary" id="eventLocUseGps" style="white-space: nowrap;"><i class="fas fa-location-crosshairs"></i> Use my location</button>
+                    </div>
+                    <div id="eventLocResults" class="list-group event-loc-results mb-2" style="display: none;"></div>
+                    <div id="eventLocationMap" class="event-location-map mb-2"></div>
+                    <label for="location" style="font-size: 14px; font-weight: 500; margin-bottom: 6px; display: block;">Venue name / address (shown to attendees)</label>
+                    <div class="input-icon">
                         <i class="fas fa-map-marker-alt"></i>
                         <input 
                             type="text"
                             id="location"
                             name="location"
                             class="form-control"
-                            placeholder="Start typing a place in Leyte"
+                            placeholder="e.g. Main campus gym"
                             value="<?= htmlspecialchars($_POST['location'] ?? '') ?>"
                             required
-                            maxlength="100"
+                            maxlength="255"
                             autocomplete="off"
                         >
-                        <div id="locationSuggestions" class="location-suggestions"></div>
                     </div>
-                    <small class="text-muted d-block mt-1">
-                        This list is based on common places in Leyte (no internet/API required).
-                    </small>
+                    <?php if ($eventsHasGeo): ?>
+                    <small class="text-muted d-block mt-1">After migrating the database, a map position is required to submit.</small>
+                    <?php endif; ?>
+                </div>
+
+                <div class="form-group">
+                    <label for="max_capacity">Max attendees (RSVP cap)</label>
+                    <input
+                        type="number"
+                        id="max_capacity"
+                        name="max_capacity"
+                        class="form-control"
+                        min="1"
+                        max="50000"
+                        placeholder="Leave empty for unlimited"
+                        value="<?= htmlspecialchars($_POST['max_capacity'] ?? '') ?>"
+                    >
+                    <small class="text-muted d-block mt-1">Students cannot register once this limit is reached. Requires database migration <code>school_events_high_value_features.sql</code> for the column.</small>
                 </div>
                 
                 <div class="form-group">
@@ -541,6 +697,8 @@ $stmt->close();
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="<?= htmlspecialchars(BASE_URL) ?>/assets/js/event_location_picker.js"></script>
 
     <script>
         function showMessageModal(msg) {
@@ -549,90 +707,34 @@ $stmt->close();
             var modal = new bootstrap.Modal(document.getElementById('messageModal'));
             modal.show();
         }
-        // Simple Leyte locations list (no external API)
-        const leyteLocations = [
-            'Tacloban City',
-            'Tacloban City Hall',
-            'Robinsons Place Tacloban',
-            'Palo, Leyte',
-            'Leyte Academic Center, Palo',
-            'Ormoc City',
-            'Western Leyte College, Ormoc City',
-            'Baybay City',
-            'Abuyog, Leyte',
-            'Alangalang, Leyte',
-            'Burauen, Leyte',
-            'Carigara, Leyte',
-            'Dagami, Leyte',
-            'Dulag, Leyte',
-            'Hilongos, Leyte',
-            'Jaro, Leyte',
-            'Kananga, Leyte',
-            'La Paz, Leyte',
-            'MacArthur, Leyte',
-            'Mayorga, Leyte',
-            'Palompon, Leyte',
-            'Tanauan, Leyte',
-            'Tolosa, Leyte',
-            'Villaba, Leyte'
-        ];
+
+        var EVENTIFY_GEOCODE_URL = <?= json_encode(BASE_URL . '/backend/auth/geocode_proxy.php') ?>;
 
         document.addEventListener('DOMContentLoaded', function () {
-            const input = document.getElementById('location');
-            const suggestionsBox = document.getElementById('locationSuggestions');
-
-            if (input && suggestionsBox) {
-                const renderSuggestions = (value) => {
-                    const query = value.trim().toLowerCase();
-                    suggestionsBox.innerHTML = '';
-
-                    if (!query) {
-                        suggestionsBox.style.display = 'none';
-                        return;
-                    }
-
-                    const matches = leyteLocations.filter(loc =>
-                        loc.toLowerCase().includes(query)
-                    ).slice(0, 8); // limit to 8 suggestions
-
-                    if (!matches.length) {
-                        suggestionsBox.style.display = 'none';
-                        return;
-                    }
-
-                    matches.forEach(loc => {
-                        const item = document.createElement('div');
-                        item.className = 'location-suggestion-item';
-                        item.textContent = loc;
-                        item.addEventListener('click', () => {
-                            input.value = loc;
-                            suggestionsBox.innerHTML = '';
-                            suggestionsBox.style.display = 'none';
-                            input.focus();
-                        });
-                        suggestionsBox.appendChild(item);
-                    });
-
-                    suggestionsBox.style.display = 'block';
-                };
-
-                input.addEventListener('input', function () {
-                    renderSuggestions(this.value);
-                });
-
-                input.addEventListener('blur', function () {
-                    setTimeout(() => {
-                        suggestionsBox.style.display = 'none';
-                    }, 150);
+            if (typeof window.initEventLocationPicker === 'function' && window.L) {
+                window.initEventLocationPicker({
+                    mapElId: 'eventLocationMap',
+                    latInputId: 'event_latitude',
+                    lngInputId: 'event_longitude',
+                    addressInputId: 'location',
+                    searchInputId: 'eventLocSearch',
+                    searchBtnId: 'eventLocSearchBtn',
+                    useLocationBtnId: 'eventLocUseGps',
+                    resultsElId: 'eventLocResults',
+                    geocodeBase: EVENTIFY_GEOCODE_URL
                 });
             }
         });
 
-        // Form validation
         document.getElementById('createEventForm').addEventListener('submit', function(e) {
+            const form = e.target;
             const title = document.getElementById('title').value.trim();
             const date = document.getElementById('date').value;
+            const startTime = (document.getElementById('start_time') || {}).value;
             const location = document.getElementById('location').value.trim();
+            const requireGeo = form.getAttribute('data-require-geo') === '1';
+            const latEl = document.getElementById('event_latitude');
+            const lngEl = document.getElementById('event_longitude');
             
             if (!title) {
                 e.preventDefault();
@@ -647,12 +749,30 @@ $stmt->close();
                 document.getElementById('date').focus();
                 return false;
             }
+
+            if (!startTime) {
+                e.preventDefault();
+                showMessageModal('Please select a start time.');
+                var st = document.getElementById('start_time');
+                if (st) st.focus();
+                return false;
+            }
             
             if (!location) {
                 e.preventDefault();
-                showMessageModal('Please enter an event location.');
+                showMessageModal('Please enter a venue name or address.');
                 document.getElementById('location').focus();
                 return false;
+            }
+
+            if (requireGeo && latEl && lngEl) {
+                var lat = latEl.value.trim();
+                var lng = lngEl.value.trim();
+                if (!lat || !lng || isNaN(parseFloat(lat)) || isNaN(parseFloat(lng))) {
+                    e.preventDefault();
+                    showMessageModal('Please set the venue on the map, search and pick a result, or use your location.');
+                    return false;
+                }
             }
             
             const today = new Date();
