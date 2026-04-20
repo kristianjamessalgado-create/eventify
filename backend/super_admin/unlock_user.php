@@ -24,34 +24,14 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !csrf_validate()) {
     eventify_redirect_superadmin_unlock('error', 'Invalid request.');
 }
 
-// Validate user ID
+// Direct unlock is intentionally disabled.
+// Locked accounts must complete email OTP reactivation and forced password change.
 $id = $_POST['id'] ?? '';
-
-if (!ctype_digit((string)$id)) {
-    eventify_redirect_superadmin_unlock('error', 'Invalid user ID');
+if (ctype_digit((string)$id)) {
+    $actorId   = $_SESSION['user_id'] ?? null;
+    $actorRole = $_SESSION['role'] ?? null;
+    $details   = "Blocked direct unlock attempt for user ID {$id}; OTP reactivation required";
+    log_activity($conn, $actorId, $actorRole, 'user_unlock_blocked', 'user', (int)$id, $details);
 }
-
-// Unlock account
-$stmt = $conn->prepare("
-    UPDATE users 
-    SET status = 'active', failed_attempts = 0 
-    WHERE id = ? AND (status <> 'active' OR failed_attempts > 0)
-");
-$stmt->bind_param("i", $id);
-$stmt->execute();
-$changed = $stmt->affected_rows > 0;
-if (!$changed) {
-    $stmt->close();
-    $conn->close();
-    eventify_redirect_superadmin_unlock('error', 'No changes made. Account may already be active and unlocked.');
-}
-
-// Log activity
-$actorId   = $_SESSION['user_id'] ?? null;
-$actorRole = $_SESSION['role'] ?? null;
-$details   = "Unlocked user ID {$id} (reset failed attempts)";
-log_activity($conn, $actorId, $actorRole, 'user_unlocked', 'user', (int)$id, $details);
-
 $conn->close();
-
-eventify_redirect_superadmin_unlock('success', 'Account unlocked successfully');
+eventify_redirect_superadmin_unlock('error', 'Direct unlock is disabled. Use Reactivate to send OTP, then the user must verify OTP and change password.');

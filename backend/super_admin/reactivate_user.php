@@ -49,7 +49,7 @@ if (($user['status'] ?? '') !== 'inactive') {
     eventify_redirect_superadmin_reactivate('error', 'User is not inactive; reactivation OTP is not required.');
 }
 
-// Reactivation OTP is intended for locked accounts only (failed attempts threshold reached).
+// Reactivation OTP is intended for locked accounts only (any non-zero failed attempts while inactive).
 $lockStmt = $conn->prepare("SELECT failed_attempts FROM users WHERE id = ? LIMIT 1");
 if ($lockStmt) {
     $lockStmt->bind_param("i", $id);
@@ -57,7 +57,7 @@ if ($lockStmt) {
     $lockRow = $lockStmt->get_result()->fetch_assoc();
     $lockStmt->close();
     $failedAttempts = (int)($lockRow['failed_attempts'] ?? 0);
-    if ($failedAttempts < 5) {
+    if ($failedAttempts <= 0) {
         $conn->close();
         eventify_redirect_superadmin_reactivate('error', 'Cannot send reactivation OTP: account is not locked.');
     }

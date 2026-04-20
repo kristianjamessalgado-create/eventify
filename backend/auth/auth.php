@@ -152,7 +152,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if ($user['status'] !== 'active') {
                 $failedAttempts = (int) ($user['failed_attempts'] ?? 0);
-                if ($failedAttempts >= 5) {
+                if ($failedAttempts > 0) {
                     // Locked account: OTP reactivation flow is allowed.
                     $redirect = BASE_URL . "/views/login.php?error=" . urlencode("Account is locked. Request OTP reactivation below.") . "&form=login&reactivate_email=" . urlencode($email);
                     header("Location: " . $redirect);

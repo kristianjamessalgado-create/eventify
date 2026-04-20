@@ -253,7 +253,7 @@ $error = $error ?? '';
                                         $role  = $user['role'] ?? '';
                                         $status = $user['status'] ?? '';
                                         $failedAttempts = (int)($user['failed_attempts'] ?? 0);
-                                        $isLockedAccount = $failedAttempts >= 5;
+                                        $isLockedAccount = $failedAttempts > 0;
                                     ?>
                                     <tr
                                         data-role="<?= htmlspecialchars($role) ?>"
@@ -285,6 +285,8 @@ $error = $error ?? '';
                                         <td>
                                             <?php if ($status === 'active'): ?>
                                                 <span class="sa-badge sa-badge-active">Active</span>
+                                            <?php elseif ($isLockedAccount): ?>
+                                                <span class="sa-badge sa-badge-locked">Locked</span>
                                             <?php else: ?>
                                                 <span class="sa-badge sa-badge-inactive"><?= ucfirst($status) ?></span>
                                             <?php endif; ?>
@@ -300,26 +302,26 @@ $error = $error ?? '';
                                                                 data-bs-target="#reactivateConfirmModal"
                                                                 data-user-id="<?= $uid ?>"
                                                                 data-open-modal="users">
-                                                            <i class="fas fa-user-check me-1"></i> Reactivate
+                                                            <i class="fas fa-paper-plane me-1"></i> Send Reactivation OTP
                                                         </button>
                                                     <?php else: ?>
                                                         <small class="text-muted d-block mb-1">New/pending account: use Activate.</small>
-                                                        <form method="POST" action="<?= BASE_URL ?>/backend/super_admin/activate_user.php" class="d-inline" onsubmit="return confirm('Activate this pending account?');">
+                                                        <form method="POST" action="<?= BASE_URL ?>/backend/super_admin/activate_user.php" class="d-inline">
                                                             <?= csrf_field() ?>
                                                             <input type="hidden" name="id" value="<?= $uid ?>">
                                                             <input type="hidden" name="open_modal" value="users">
-                                                            <button type="submit" class="sa-btn-react">
+                                                            <button type="button" class="sa-btn-react js-confirm-submit" data-confirm-message="Activate this pending account?">
                                                                 <i class="fas fa-user-check me-1"></i> Activate
                                                             </button>
                                                         </form>
                                                     <?php endif; ?>
                                                 <?php else: ?>
                                                     <?php if ($role !== 'super_admin'): ?>
-                                                        <form method="POST" action="<?= BASE_URL ?>/backend/super_admin/deactivate_user.php" class="d-inline" onsubmit="return confirm('Deactivate this user account?');">
+                                                        <form method="POST" action="<?= BASE_URL ?>/backend/super_admin/deactivate_user.php" class="d-inline">
                                                             <?= csrf_field() ?>
                                                             <input type="hidden" name="id" value="<?= $uid ?>">
                                                             <input type="hidden" name="open_modal" value="users">
-                                                            <button type="submit" class="btn btn-sm btn-outline-danger">
+                                                            <button type="button" class="btn btn-sm btn-outline-danger js-confirm-submit" data-confirm-message="Deactivate this user account?">
                                                                 <i class="fas fa-user-slash"></i>
                                                             </button>
                                                         </form>
@@ -633,13 +635,13 @@ $error = $error ?? '';
                                                         <i class="fas fa-times"></i> Reject
                                                     </button>
                                                 <?php elseif ($estatus === 'active'): ?>
-                                                    <form method="POST" action="<?= BASE_URL ?>/backend/super_admin/update_event_status.php" class="d-inline" onsubmit="return confirm('Close this event?');">
+                                                    <form method="POST" action="<?= BASE_URL ?>/backend/super_admin/update_event_status.php" class="d-inline">
                                                         <?= csrf_field() ?>
                                                         <input type="hidden" name="event_id" value="<?= $eid ?>">
                                                         <input type="hidden" name="action" value="close">
                                                         <input type="hidden" name="return_to" value="dashboard">
                                                         <input type="hidden" name="open_modal" value="events">
-                                                        <button type="submit" class="btn btn-sm btn-outline-secondary"><i class="fas fa-archive"></i> Close</button>
+                                                        <button type="button" class="btn btn-sm btn-outline-secondary js-confirm-submit" data-confirm-message="Close this event?"><i class="fas fa-archive"></i> Close</button>
                                                     </form>
                                                 <?php else: ?>
                                                     <span class="text-muted small">—</span>
@@ -734,11 +736,11 @@ $error = $error ?? '';
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="reactivateConfirmModalLabel"><i class="fas fa-user-check me-2"></i>Confirm Reactivate</h5>
+                <h5 class="modal-title" id="reactivateConfirmModalLabel"><i class="fas fa-envelope-open-text me-2"></i>Send Reactivation OTP</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <p class="mb-0">Are you sure you want to reactivate this account?</p>
+                <p class="mb-0">Send a verification code to this locked account? The user must verify the OTP and change password before normal access.</p>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -746,8 +748,27 @@ $error = $error ?? '';
                     <?= csrf_field() ?>
                     <input type="hidden" name="id" id="reactivateUserId" value="">
                     <input type="hidden" name="open_modal" id="reactivateOpenModal" value="users">
-                    <button type="submit" class="btn btn-success" id="reactivateConfirmBtn"><i class="fas fa-check me-1"></i> Yes, Reactivate</button>
+                    <button type="submit" class="btn btn-success" id="reactivateConfirmBtn"><i class="fas fa-paper-plane me-1"></i> Send OTP</button>
                 </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Generic Action Confirmation Modal -->
+<div class="modal fade" id="actionConfirmModal" tabindex="-1" aria-labelledby="actionConfirmModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="actionConfirmModalLabel"><i class="fas fa-circle-question me-2"></i>Confirm Action</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-0" id="actionConfirmText">Are you sure you want to continue?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="actionConfirmProceedBtn">Yes, Continue</button>
             </div>
         </div>
     </div>

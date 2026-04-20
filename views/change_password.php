@@ -47,6 +47,19 @@ try {
         .cp-msg { width: 100%; border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; font-size: 13px; }
         .cp-msg.ok { background: rgba(22,163,74,0.2); border: 1px solid rgba(74,222,128,0.5); color: #bbf7d0; }
         .cp-msg.err { background: rgba(220,38,38,0.2); border: 1px solid rgba(248,113,113,0.5); color: #fecaca; }
+        .pw-field { display: flex; align-items: center; gap: 8px; width: 100%; }
+        .pw-field input { flex: 1; }
+        .pw-toggle {
+            border: 1px solid rgba(148, 163, 184, 0.5);
+            background: rgba(15, 23, 42, 0.85);
+            color: #e2e8f0;
+            border-radius: 8px;
+            padding: 8px 10px;
+            font-size: 12px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .pw-toggle:hover { background: rgba(30, 41, 59, 0.95); }
     </style>
 </head>
 <body>
@@ -70,19 +83,43 @@ try {
             <input type="hidden" name="from" value="<?= htmlspecialchars($from) ?>">
             <?php if (!$forceReset): ?>
                 <div class="input-box">
-                    <input type="password" name="current_password" placeholder="Current Password" required>
+                    <div class="pw-field">
+                        <input type="password" name="current_password" id="current_password" placeholder="Current Password" required>
+                        <button type="button" class="pw-toggle" data-target="current_password">Show</button>
+                    </div>
                 </div>
             <?php endif; ?>
             <div class="input-box">
-                <input type="password" name="new_password" placeholder="New Password" required>
+                <div class="pw-field">
+                    <input type="password" name="new_password" id="new_password" placeholder="New Password" required>
+                    <button type="button" class="pw-toggle" data-target="new_password">Show</button>
+                </div>
             </div>
             <div class="input-box">
-                <input type="password" name="confirm_password" placeholder="Confirm New Password" required>
+                <div class="pw-field">
+                    <input type="password" name="confirm_password" id="confirm_password" placeholder="Confirm New Password" required>
+                    <button type="button" class="pw-toggle" data-target="confirm_password">Show</button>
+                </div>
             </div>
             <small class="field-hint">New password must be at least 8 chars with 1 uppercase and 1 special character.</small>
             <button type="submit" class="btn">Update Password</button>
         </form>
     </div>
 </div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var toggles = document.querySelectorAll('.pw-toggle');
+    toggles.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var targetId = btn.getAttribute('data-target') || '';
+            var input = document.getElementById(targetId);
+            if (!input) return;
+            var isHidden = input.type === 'password';
+            input.type = isHidden ? 'text' : 'password';
+            btn.textContent = isHidden ? 'Hide' : 'Show';
+        });
+    });
+});
+</script>
 </body>
 </html>

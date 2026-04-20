@@ -1,4 +1,36 @@
 function eventifyInitSuperAdminDashboard() {
+    var pendingConfirmForm = null;
+    var actionConfirmModalEl = document.getElementById('actionConfirmModal');
+    var actionConfirmTextEl = document.getElementById('actionConfirmText');
+    var actionConfirmProceedBtn = document.getElementById('actionConfirmProceedBtn');
+    var actionConfirmModal = null;
+    if (actionConfirmModalEl && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+        actionConfirmModal = bootstrap.Modal.getOrCreateInstance(actionConfirmModalEl);
+        document.addEventListener('click', function (e) {
+            var trigger = e.target.closest('.js-confirm-submit');
+            if (!trigger) return;
+            e.preventDefault();
+            var form = trigger.closest('form');
+            if (!form) return;
+            pendingConfirmForm = form;
+            var msg = trigger.getAttribute('data-confirm-message') || 'Are you sure you want to continue?';
+            if (actionConfirmTextEl) actionConfirmTextEl.textContent = msg;
+            actionConfirmModal.show();
+        });
+        if (actionConfirmProceedBtn) {
+            actionConfirmProceedBtn.addEventListener('click', function () {
+                if (!pendingConfirmForm) return;
+                var formToSubmit = pendingConfirmForm;
+                pendingConfirmForm = null;
+                actionConfirmModal.hide();
+                formToSubmit.submit();
+            });
+        }
+        actionConfirmModalEl.addEventListener('hidden.bs.modal', function () {
+            pendingConfirmForm = null;
+        });
+    }
+
     var reactivateModalEl = document.getElementById('reactivateConfirmModal');
     if (reactivateModalEl) {
         reactivateModalEl.addEventListener('show.bs.modal', function (e) {

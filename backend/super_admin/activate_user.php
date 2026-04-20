@@ -44,15 +44,16 @@ if (!$user) {
     eventify_redirect_superadmin_activate('error', 'User not found.');
 }
 
-$isLockedAccount = ((int)($user['failed_attempts'] ?? 0) >= 5);
+$isLockedAccount = ((int)($user['failed_attempts'] ?? 0) > 0);
 if ($isLockedAccount) {
-    // Locked accounts require a completed reactivation OTP verification first.
+    // Locked accounts require a recent completed reactivation OTP verification first.
     $otpStmt = $conn->prepare("
         SELECT id
         FROM account_email_otps
         WHERE purpose = 'reactivate'
           AND user_id = ?
           AND used_at IS NOT NULL
+          AND used_at >= (NOW() - INTERVAL 30 MINUTE)
         ORDER BY used_at DESC, id DESC
         LIMIT 1
     ");
@@ -67,7 +68,7 @@ if ($isLockedAccount) {
 
     if (!$otpVerified) {
         $conn->close();
-        eventify_redirect_superadmin_activate('error', 'Cannot activate yet: reactivation OTP not verified.');
+        eventify_redirect_superadmin_activate('error', 'Cannot activate yet: recent reactivation OTP not verified.');
     }
 }
 

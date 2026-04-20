@@ -261,6 +261,7 @@ body {
 }
 .sa-badge-active { background: #dcfce7; color: #166534; }
 .sa-badge-inactive { background: #f1f5f9; color: #64748b; }
+.sa-badge-locked { background: #fee2e2; color: #b91c1c; }
 .sa-badge-pending { background: #fef3c7; color: #92400e; }
 .sa-badge-rejected { background: #fee2e2; color: #b91c1c; }
 .sa-badge-closed { background: #e2e8f0; color: #475569; }
