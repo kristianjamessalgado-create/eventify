@@ -17,6 +17,7 @@ $usersTotalPages = isset($usersTotalPages) ? (int) $usersTotalPages : 1;
 $eventsPage = isset($eventsPage) ? (int) $eventsPage : 1;
 $eventsTotalPages = isset($eventsTotalPages) ? (int) $eventsTotalPages : 1;
 $success = $success ?? '';
+$error = $error ?? '';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -30,319 +31,7 @@ $success = $success ?? '';
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
-            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%);
-            min-height: 100vh;
-            color: #1e293b;
-        }
-        .sa-navbar {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 1rem 2rem;
-            background: rgba(10, 10, 10, 0.85);
-            backdrop-filter: blur(10px);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-        }
-        .sa-brand {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            font-weight: 800;
-            font-size: 1.35rem;
-            color: #e7e7e7;
-            letter-spacing: -0.02em;
-        }
-        .sa-brand i { color: #00bfff; }
-        .sa-user {
-            color: #94a3b8;
-            font-size: 0.95rem;
-            font-weight: 500;
-            margin-right: 1rem;
-        }
-        .sa-logout {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.5rem 1rem;
-            color: #94a3b8;
-            text-decoration: none;
-            font-weight: 600;
-            border-radius: 8px;
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            transition: all 0.2s;
-        }
-        .sa-logout:hover { color: #00bfff; border-color: #00bfff; background: rgba(0, 191, 255, 0.1); }
-        .sa-main {
-            padding: 2rem;
-        }
-        .sa-layout {
-            max-width: 1200px;
-            margin: 0 auto;
-            display: flex;
-            gap: 1.5rem;
-        }
-        .sa-sidebar {
-            width: 260px;
-            background: rgba(15, 23, 42, 0.9);
-            border-radius: 16px;
-            padding: 1.25rem;
-            box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
-            color: #e5e7eb;
-            display: flex;
-            flex-direction: column;
-            gap: 1rem;
-        }
-        .sa-sidebar-header {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            margin-bottom: 0.5rem;
-        }
-        .sa-sidebar-avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 999px;
-            background: linear-gradient(135deg, #0ea5e9, #22c55e);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 800;
-            color: #0b1120;
-        }
-        .sa-sidebar-name {
-            font-size: 0.95rem;
-            font-weight: 600;
-        }
-        .sa-sidebar-role {
-            font-size: 0.75rem;
-            color: #9ca3af;
-        }
-        .sa-nav-group-label {
-            font-size: 0.7rem;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            color: #64748b;
-            margin-top: 0.75rem;
-            margin-bottom: 0.25rem;
-        }
-        .sa-nav-btn {
-            width: 100%;
-            border-radius: 10px;
-            padding: 0.55rem 0.75rem;
-            border: 1px solid rgba(148, 163, 184, 0.3);
-            background: rgba(15, 23, 42, 0.9);
-            color: #e5e7eb;
-            font-size: 0.85rem;
-            font-weight: 500;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 0.5rem;
-            text-decoration: none;
-            transition: all 0.18s ease;
-        }
-        .sa-nav-btn i {
-            font-size: 0.9rem;
-        }
-        .sa-nav-btn span {
-            flex: 1;
-            text-align: left;
-        }
-        .sa-nav-btn:hover {
-            border-color: #38bdf8;
-            background: rgba(15, 23, 42, 0.98);
-            color: #e0f2fe;
-            box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.35);
-        }
-        .sa-nav-btn.primary {
-            border-color: #22c55e;
-            background: rgba(22, 163, 74, 0.08);
-        }
-        .sa-nav-btn.primary:hover {
-            background: rgba(22, 163, 74, 0.2);
-            box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.4);
-        }
-        .sa-nav-footer {
-            margin-top: auto;
-            font-size: 0.75rem;
-            color: #64748b;
-        }
-        .sa-nav-footer strong {
-            color: #e5e7eb;
-        }
-        .sa-content {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            gap: 1.25rem;
-        }
-        .sa-stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 1rem;
-            padding: 1.25rem 1.5rem 1.5rem;
-        }
-        .sa-stat-card {
-            border-radius: 12px;
-            border: 1px solid #e2e8f0;
-            padding: 0.9rem 1rem;
-            background: #f8fafc;
-        }
-        .sa-stat-label {
-            font-size: 0.75rem;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            color: #64748b;
-            margin-bottom: 0.25rem;
-            display: flex;
-            align-items: center;
-            gap: 0.4rem;
-        }
-        .sa-stat-value {
-            font-size: 1.4rem;
-            font-weight: 800;
-            color: #0f172a;
-            margin-bottom: 0.1rem;
-        }
-        .sa-stat-sub {
-            font-size: 0.8rem;
-            color: #6b7280;
-        }
-        .sa-charts-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-            gap: 1rem;
-            padding: 0 1.5rem 1.5rem;
-        }
-        .sa-chart-card {
-            border-radius: 12px;
-            border: 1px solid #e2e8f0;
-            background: #fff;
-            padding: 0.9rem;
-        }
-        .sa-chart-title {
-            font-size: 0.72rem;
-            text-transform: uppercase;
-            letter-spacing: 0.07em;
-            color: #64748b;
-            margin-bottom: 0.5rem;
-        }
-        .sa-chart-wrap { position: relative; height: 220px; }
-        .sa-card {
-            background: #fff;
-            border-radius: 16px;
-            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
-            overflow: hidden;
-        }
-        .sa-card-header {
-            padding: 1.5rem 2rem;
-            border-bottom: 1px solid #e2e8f0;
-            background: linear-gradient(180deg, #f8fafc 0%, #fff 100%);
-        }
-        .sa-card-header h1 {
-            font-size: 1.5rem;
-            font-weight: 800;
-            color: #1e293b;
-            margin: 0;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        .sa-card-header h1 i { color: #00bfff; }
-        .sa-alert {
-            margin: 0 2rem 1.5rem;
-            border-radius: 12px;
-            padding: 1rem 1.25rem;
-        }
-        .sa-table-wrap { padding: 0 1.5rem 1.5rem; overflow-x: auto; }
-        .sa-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.9rem;
-        }
-        .sa-table thead tr {
-            background: #f1f5f9;
-            border-bottom: 2px solid #e2e8f0;
-        }
-        .sa-table th {
-            padding: 1rem 1.25rem;
-            text-align: left;
-            font-weight: 700;
-            color: #475569;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            font-size: 0.75rem;
-        }
-        .sa-table td {
-            padding: 1rem 1.25rem;
-            border-bottom: 1px solid #e2e8f0;
-            color: #334155;
-        }
-        .sa-table tbody tr:hover { background: #f8fafc; }
-        .sa-table tbody tr:last-child td { border-bottom: none; }
-        .sa-badge {
-            display: inline-block;
-            padding: 0.35rem 0.75rem;
-            border-radius: 8px;
-            font-size: 0.8rem;
-            font-weight: 700;
-        }
-        .sa-badge-active { background: #dcfce7; color: #166534; }
-        .sa-badge-inactive { background: #f1f5f9; color: #64748b; }
-        .sa-badge-pending { background: #fef3c7; color: #92400e; }
-        .sa-badge-rejected { background: #fee2e2; color: #b91c1c; }
-        .sa-badge-closed { background: #e2e8f0; color: #475569; }
-        .sa-badge-dept { background: #eff6ff; color: #1d4ed8; }
-        .sa-actions { display: flex; flex-wrap: wrap; gap: 0.35rem; }
-        .sa-btn-react {
-            padding: 0.4rem 0.85rem;
-            font-size: 0.8rem;
-            font-weight: 600;
-            border-radius: 8px;
-            border: none;
-            background: #10b981;
-            color: #fff;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .sa-btn-react:hover { background: #059669; color: #fff; }
-        .sa-empty {
-            text-align: center;
-            padding: 3rem 2rem;
-            color: #64748b;
-        }
-        .sa-empty i { font-size: 3rem; margin-bottom: 1rem; opacity: 0.5; }
-        @media (max-width: 768px) {
-            .sa-navbar { padding: 0.875rem 1rem; flex-wrap: wrap; gap: 0.5rem; }
-            .sa-main { padding: 1rem; }
-            .sa-layout { flex-direction: column; }
-            .sa-sidebar { width: 100%; }
-            .sa-card-header, .sa-table th, .sa-table td { padding: 0.75rem 1rem; }
-            .sa-table { font-size: 0.85rem; }
-            .modal-dialog {
-                margin: 0.5rem;
-            }
-            .sa-stats-grid {
-                grid-template-columns: 1fr;
-                padding: 1rem;
-            }
-            .sa-charts-grid {
-                grid-template-columns: 1fr;
-                padding: 0 1rem 1rem;
-            }
-            .sa-table-wrap {
-                padding: 0 0.75rem 1rem;
-            }
-            .sa-actions {
-                gap: 0.25rem;
-            }
-        }
-    </style>
+    <link rel="stylesheet" href="<?= BASE_URL; ?>/assets/css/dashboardsuperadmin.css">
 </head>
 <body>
 
@@ -439,6 +128,14 @@ $success = $success ?? '';
                     <div class="sa-table-wrap">
                         <div class="alert alert-success alert-dismissible fade show sa-alert mt-3" role="alert">
                             <i class="fas fa-check-circle me-2"></i><?= htmlspecialchars($success) ?>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    </div>
+                <?php endif; ?>
+                <?php if ($error): ?>
+                    <div class="sa-table-wrap">
+                        <div class="alert alert-danger alert-dismissible fade show sa-alert mt-3" role="alert">
+                            <i class="fas fa-triangle-exclamation me-2"></i><?= htmlspecialchars($error) ?>
                             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                         </div>
                     </div>
@@ -569,6 +266,7 @@ $success = $success ?? '';
                                             <form method="POST" action="<?= BASE_URL ?>/backend/super_admin/update_user_role.php" class="d-flex gap-1 align-items-center">
                                                 <?= csrf_field() ?>
                                                 <input type="hidden" name="user_id" value="<?= $uid ?>">
+                                                <input type="hidden" name="open_modal" value="users">
                                                 <select name="new_role" class="form-select form-select-sm" style="min-width: 140px;">
                                                     <?php
                                                         $allRoles = ['super_admin','admin','organizer','multimedia','student'];
@@ -600,7 +298,8 @@ $success = $success ?? '';
                                                                 class="sa-btn-react"
                                                                 data-bs-toggle="modal"
                                                                 data-bs-target="#reactivateConfirmModal"
-                                                                data-user-id="<?= $uid ?>">
+                                                                data-user-id="<?= $uid ?>"
+                                                                data-open-modal="users">
                                                             <i class="fas fa-user-check me-1"></i> Reactivate
                                                         </button>
                                                     <?php else: ?>
@@ -608,6 +307,7 @@ $success = $success ?? '';
                                                         <form method="POST" action="<?= BASE_URL ?>/backend/super_admin/activate_user.php" class="d-inline" onsubmit="return confirm('Activate this pending account?');">
                                                             <?= csrf_field() ?>
                                                             <input type="hidden" name="id" value="<?= $uid ?>">
+                                                            <input type="hidden" name="open_modal" value="users">
                                                             <button type="submit" class="sa-btn-react">
                                                                 <i class="fas fa-user-check me-1"></i> Activate
                                                             </button>
@@ -618,6 +318,7 @@ $success = $success ?? '';
                                                         <form method="POST" action="<?= BASE_URL ?>/backend/super_admin/deactivate_user.php" class="d-inline" onsubmit="return confirm('Deactivate this user account?');">
                                                             <?= csrf_field() ?>
                                                             <input type="hidden" name="id" value="<?= $uid ?>">
+                                                            <input type="hidden" name="open_modal" value="users">
                                                             <button type="submit" class="btn btn-sm btn-outline-danger">
                                                                 <i class="fas fa-user-slash"></i>
                                                             </button>
@@ -634,8 +335,8 @@ $success = $success ?? '';
                             <small class="text-muted">Page <?= (int)$usersPage ?> of <?= (int)$usersTotalPages ?></small>
                             <div class="btn-group btn-group-sm">
                                 <?php $prevUsersPage = max(1, $usersPage - 1); $nextUsersPage = min($usersTotalPages, $usersPage + 1); ?>
-                                <a class="btn btn-outline-secondary <?= $usersPage <= 1 ? 'disabled' : '' ?>" href="<?= BASE_URL ?>/backend/super_admin/dashboardsuperadmin.php?users_page=<?= $prevUsersPage ?>&events_page=<?= (int)$eventsPage ?>">Prev</a>
-                                <a class="btn btn-outline-secondary <?= $usersPage >= $usersTotalPages ? 'disabled' : '' ?>" href="<?= BASE_URL ?>/backend/super_admin/dashboardsuperadmin.php?users_page=<?= $nextUsersPage ?>&events_page=<?= (int)$eventsPage ?>">Next</a>
+                                <a class="btn btn-outline-secondary <?= $usersPage <= 1 ? 'disabled' : '' ?>" href="<?= BASE_URL ?>/backend/super_admin/dashboardsuperadmin.php?users_page=<?= $prevUsersPage ?>&events_page=<?= (int)$eventsPage ?>&open_modal=users">Prev</a>
+                                <a class="btn btn-outline-secondary <?= $usersPage >= $usersTotalPages ? 'disabled' : '' ?>" href="<?= BASE_URL ?>/backend/super_admin/dashboardsuperadmin.php?users_page=<?= $nextUsersPage ?>&events_page=<?= (int)$eventsPage ?>&open_modal=users">Next</a>
                             </div>
                         </div>
                     <?php endif; ?>
@@ -800,11 +501,13 @@ $success = $success ?? '';
                                                     <?= csrf_field() ?>
                                                     <input type="hidden" name="event_id" value="<?= (int)$event['id'] ?>">
                                                     <input type="hidden" name="action" value="approve">
+                                                    <input type="hidden" name="return_to" value="dashboard">
+                                                    <input type="hidden" name="open_modal" value="pending">
                                                     <button type="submit" class="sa-btn-approve">
                                                         <i class="fas fa-check"></i> Approve
                                                     </button>
                                                 </form>
-                                                <button type="button" class="sa-btn-reject" data-bs-toggle="modal" data-bs-target="#rejectEventModal" data-event-id="<?= (int)$event['id'] ?>" data-event-title="<?= htmlspecialchars($event['title'] ?? '') ?>" data-return-to="dashboard">
+                                                <button type="button" class="sa-btn-reject" data-bs-toggle="modal" data-bs-target="#rejectEventModal" data-event-id="<?= (int)$event['id'] ?>" data-event-title="<?= htmlspecialchars($event['title'] ?? '') ?>" data-return-to="dashboard" data-open-modal="pending">
                                                     <i class="fas fa-times"></i> Reject
                                                 </button>
                                             </div>
@@ -839,6 +542,7 @@ $success = $success ?? '';
                         <option value="active">Active</option>
                         <option value="rejected">Rejected</option>
                         <option value="closed">Closed</option>
+                        <option value="completed">Completed</option>
                     </select>
                     <select id="allEventsDeptFilter" class="form-select form-select-sm" style="max-width: 200px;">
                         <option value="">All Departments</option>
@@ -907,6 +611,8 @@ $success = $success ?? '';
                                                 <span class="sa-badge sa-badge-active">Active</span>
                                             <?php elseif ($estatus === 'rejected'): ?>
                                                 <span class="sa-badge sa-badge-rejected">Rejected</span>
+                                            <?php elseif ($estatus === 'completed'): ?>
+                                                <span class="sa-badge sa-badge-closed">Completed</span>
                                             <?php else: ?>
                                                 <span class="sa-badge sa-badge-closed">Closed</span>
                                             <?php endif; ?>
@@ -919,9 +625,11 @@ $success = $success ?? '';
                                                         <?= csrf_field() ?>
                                                         <input type="hidden" name="event_id" value="<?= $eid ?>">
                                                         <input type="hidden" name="action" value="approve">
+                                                        <input type="hidden" name="return_to" value="dashboard">
+                                                        <input type="hidden" name="open_modal" value="events">
                                                         <button type="submit" class="sa-btn-approve btn btn-sm"><i class="fas fa-check"></i> Approve</button>
                                                     </form>
-                                                    <button type="button" class="sa-btn-reject btn btn-sm" data-bs-toggle="modal" data-bs-target="#rejectEventModal" data-event-id="<?= $eid ?>" data-event-title="<?= htmlspecialchars($ev['title'] ?? '') ?>" data-return-to="dashboard">
+                                                    <button type="button" class="sa-btn-reject btn btn-sm" data-bs-toggle="modal" data-bs-target="#rejectEventModal" data-event-id="<?= $eid ?>" data-event-title="<?= htmlspecialchars($ev['title'] ?? '') ?>" data-return-to="dashboard" data-open-modal="events">
                                                         <i class="fas fa-times"></i> Reject
                                                     </button>
                                                 <?php elseif ($estatus === 'active'): ?>
@@ -929,6 +637,8 @@ $success = $success ?? '';
                                                         <?= csrf_field() ?>
                                                         <input type="hidden" name="event_id" value="<?= $eid ?>">
                                                         <input type="hidden" name="action" value="close">
+                                                        <input type="hidden" name="return_to" value="dashboard">
+                                                        <input type="hidden" name="open_modal" value="events">
                                                         <button type="submit" class="btn btn-sm btn-outline-secondary"><i class="fas fa-archive"></i> Close</button>
                                                     </form>
                                                 <?php else: ?>
@@ -944,8 +654,8 @@ $success = $success ?? '';
                             <small class="text-muted">Page <?= (int)$eventsPage ?> of <?= (int)$eventsTotalPages ?></small>
                             <div class="btn-group btn-group-sm">
                                 <?php $prevEventsPage = max(1, $eventsPage - 1); $nextEventsPage = min($eventsTotalPages, $eventsPage + 1); ?>
-                                <a class="btn btn-outline-secondary <?= $eventsPage <= 1 ? 'disabled' : '' ?>" href="<?= BASE_URL ?>/backend/super_admin/dashboardsuperadmin.php?events_page=<?= $prevEventsPage ?>&users_page=<?= (int)$usersPage ?>">Prev</a>
-                                <a class="btn btn-outline-secondary <?= $eventsPage >= $eventsTotalPages ? 'disabled' : '' ?>" href="<?= BASE_URL ?>/backend/super_admin/dashboardsuperadmin.php?events_page=<?= $nextEventsPage ?>&users_page=<?= (int)$usersPage ?>">Next</a>
+                                <a class="btn btn-outline-secondary <?= $eventsPage <= 1 ? 'disabled' : '' ?>" href="<?= BASE_URL ?>/backend/super_admin/dashboardsuperadmin.php?events_page=<?= $prevEventsPage ?>&users_page=<?= (int)$usersPage ?>&open_modal=events">Prev</a>
+                                <a class="btn btn-outline-secondary <?= $eventsPage >= $eventsTotalPages ? 'disabled' : '' ?>" href="<?= BASE_URL ?>/backend/super_admin/dashboardsuperadmin.php?events_page=<?= $nextEventsPage ?>&users_page=<?= (int)$usersPage ?>&open_modal=events">Next</a>
                             </div>
                         </div>
                     <?php endif; ?>
@@ -964,6 +674,7 @@ $success = $success ?? '';
                 <input type="hidden" name="event_id" id="rejectEventId" value="">
                 <input type="hidden" name="action" value="reject">
                 <input type="hidden" name="return_to" id="rejectReturnTo" value="dashboard">
+                <input type="hidden" name="open_modal" id="rejectOpenModal" value="events">
                 <div class="modal-header">
                     <h5 class="modal-title" id="rejectEventModalLabel"><i class="fas fa-times-circle me-2 text-danger"></i>Reject event</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -1034,6 +745,7 @@ $success = $success ?? '';
                 <form method="POST" action="<?= BASE_URL ?>/backend/super_admin/reactivate_user.php" class="d-inline" id="reactivateConfirmForm">
                     <?= csrf_field() ?>
                     <input type="hidden" name="id" id="reactivateUserId" value="">
+                    <input type="hidden" name="open_modal" id="reactivateOpenModal" value="users">
                     <button type="submit" class="btn btn-success" id="reactivateConfirmBtn"><i class="fas fa-check me-1"></i> Yes, Reactivate</button>
                 </form>
             </div>
@@ -1070,151 +782,14 @@ window.saAllEventsJson = <?= json_encode(array_values(array_filter(array_map(fun
         ],
     ];
 }, $allEvents))), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
-
-document.getElementById('reactivateConfirmModal').addEventListener('show.bs.modal', function(e) {
-    var btn = e.relatedTarget;
-    var userId = btn && btn.getAttribute ? btn.getAttribute('data-user-id') : '';
-    var input = document.getElementById('reactivateUserId');
-    if (input) input.value = userId || '';
+</script>
+<script src="<?= BASE_URL ?>/assets/js/dashboardsuperadmin.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    if (typeof eventifyInitSuperAdminDashboard === 'function') {
+        eventifyInitSuperAdminDashboard();
+    }
 });
-
-if (typeof Chart !== 'undefined') {
-    var ur = window.saUserRoles || { labels: [], counts: [] };
-    var es = window.saEventStatus || { labels: [], counts: [] };
-    var uCtx = document.getElementById('saUsersChart');
-    if (uCtx) {
-        new Chart(uCtx, {
-            type: 'bar',
-            data: { labels: ur.labels || [], datasets: [{ data: ur.counts || [], backgroundColor: 'rgba(56,189,248,0.65)', borderColor: 'rgba(56,189,248,1)', borderWidth: 1 }] },
-            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
-        });
-    }
-    var eCtx = document.getElementById('saEventsChart');
-    if (eCtx) {
-        new Chart(eCtx, {
-            type: 'doughnut',
-            data: { labels: es.labels || [], datasets: [{ data: es.counts || [], backgroundColor: ['rgba(234,179,8,.85)','rgba(16,185,129,.85)','rgba(239,68,68,.85)','rgba(100,116,139,.85)'] }] },
-            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
-        });
-    }
-}
-
-var rejectModalEl = document.getElementById('rejectEventModal');
-if (rejectModalEl) {
-    rejectModalEl.addEventListener('show.bs.modal', function(e) {
-        var btn = e.relatedTarget;
-        if (btn && btn.getAttribute('data-event-id')) {
-            document.getElementById('rejectEventId').value = btn.getAttribute('data-event-id') || '';
-            document.getElementById('rejectReturnTo').value = btn.getAttribute('data-return-to') || 'dashboard';
-            var title = btn.getAttribute('data-event-title') || 'this event';
-            document.getElementById('rejectEventTitleText').textContent = 'Reject "' + title + '"? Optionally give a reason so the organizer knows what to fix.';
-            document.getElementById('rejectReasonInput').value = '';
-        }
-    });
-}
-
-// Simple client-side filtering for All Users table
-(function() {
-    var searchInput = document.getElementById('userSearch');
-    var roleFilter  = document.getElementById('roleFilter');
-    var statusFilter = document.getElementById('statusFilter');
-    var table = document.getElementById('usersTable');
-    if (!table) return;
-
-    var rows = Array.prototype.slice.call(table.querySelectorAll('tbody tr'));
-
-    function applyFilters() {
-        var query = (searchInput && searchInput.value ? searchInput.value.toLowerCase() : '').trim();
-        var role  = roleFilter ? roleFilter.value : '';
-        var status = statusFilter ? statusFilter.value : '';
-
-        rows.forEach(function(row) {
-            var nameCell  = row.cells[1] ? row.cells[1].innerText.toLowerCase() : '';
-            var emailCell = row.cells[2] ? row.cells[2].innerText.toLowerCase() : '';
-            var rowRole   = row.getAttribute('data-role') || '';
-            var rowStatus = row.getAttribute('data-status') || '';
-
-            var matchesSearch = !query || nameCell.indexOf(query) !== -1 || emailCell.indexOf(query) !== -1;
-            var matchesRole   = !role || rowRole === role;
-            var matchesStatus = !status || rowStatus === status;
-
-            row.style.display = (matchesSearch && matchesRole && matchesStatus) ? '' : 'none';
-        });
-    }
-
-    if (searchInput) searchInput.addEventListener('input', applyFilters);
-    if (roleFilter) roleFilter.addEventListener('change', applyFilters);
-    if (statusFilter) statusFilter.addEventListener('change', applyFilters);
-})();
-
-// All Events table filters
-(function() {
-    var searchInput = document.getElementById('eventSearch');
-    var statusFilter = document.getElementById('allEventsStatusFilter');
-    var deptFilter = document.getElementById('allEventsDeptFilter');
-    var table = document.getElementById('allEventsTable');
-    if (!table) return;
-    var rows = Array.prototype.slice.call(table.querySelectorAll('tbody tr'));
-    function applyEventFilters() {
-        var q = (searchInput && searchInput.value ? searchInput.value.toLowerCase() : '').trim();
-        var status = statusFilter ? statusFilter.value : '';
-        var dept = deptFilter ? deptFilter.value : '';
-        rows.forEach(function(row) {
-            var titleCell = row.cells[1] ? row.cells[1].innerText.toLowerCase() : '';
-            var locCell = row.cells[2] ? row.cells[2].innerText.toLowerCase() : '';
-            var rowStatus = row.getAttribute('data-status') || '';
-            var rowDept = row.getAttribute('data-dept') || '';
-            var matchSearch = !q || titleCell.indexOf(q) !== -1 || locCell.indexOf(q) !== -1;
-            var matchStatus = !status || rowStatus === status;
-            var matchDept = !dept || rowDept === dept;
-            row.style.display = (matchSearch && matchStatus && matchDept) ? '' : 'none';
-        });
-    }
-    if (searchInput) searchInput.addEventListener('input', applyEventFilters);
-    if (statusFilter) statusFilter.addEventListener('change', applyEventFilters);
-    if (deptFilter) deptFilter.addEventListener('change', applyEventFilters);
-})();
-
-// Calendar modal: init FullCalendar when modal is fully shown (so dimensions are correct)
-var saCalendarInstance = null;
-var calendarModalEl = document.getElementById('calendarModal');
-if (calendarModalEl) {
-    calendarModalEl.addEventListener('shown.bs.modal', function() {
-        var el = document.getElementById('saCalendar');
-        if (!el) return;
-        if (saCalendarInstance) {
-            try { saCalendarInstance.destroy(); } catch (err) {}
-            saCalendarInstance = null;
-        }
-        if (typeof FullCalendar === 'undefined') {
-            console.warn('FullCalendar not loaded');
-            el.innerHTML = '<p class="text-muted p-3">Calendar could not load. Check console.</p>';
-            return;
-        }
-        var events = window.saAllEventsJson;
-        if (!Array.isArray(events)) events = [];
-        saCalendarInstance = new FullCalendar.Calendar(el, {
-            initialView: 'dayGridMonth',
-            headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek' },
-            events: events,
-            eventDisplay: 'block',
-            height: 400,
-            eventDidMount: function(info) {
-                var status = (info.event.extendedProps && info.event.extendedProps.status) ? info.event.extendedProps.status : '';
-                if (status === 'pending') info.el.style.backgroundColor = '#d97706';
-                else if (status === 'rejected') info.el.style.backgroundColor = '#b91c1c';
-                else if (status === 'closed') info.el.style.backgroundColor = '#64748b';
-            },
-        });
-        saCalendarInstance.render();
-    });
-    calendarModalEl.addEventListener('hidden.bs.modal', function() {
-        if (saCalendarInstance) {
-            try { saCalendarInstance.destroy(); } catch (err) {}
-            saCalendarInstance = null;
-        }
-    });
-}
 </script>
 </body>
 </html>

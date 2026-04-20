@@ -149,6 +149,7 @@ if ($checkin_token !== '') {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>EVENTIFY</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <link rel="stylesheet" href="/school_events/assets/css/index.css">
 <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet">
 </head>
@@ -339,8 +340,12 @@ if ($checkin_token !== '') {
                 </div>
                 <div class="auth-input-wrap auth-password-wrap">
                     <label class="auth-label" for="loginModalPassword">Password</label>
-                    <input type="password" name="password" id="loginModalPassword" class="auth-input" placeholder="Enter password" required>
-                    <button type="button" class="auth-eye-btn" id="toggleLoginModalPassword" aria-label="Show password" aria-pressed="false">👁</button>
+                    <div class="auth-password-input-row">
+                        <input type="password" name="password" id="loginModalPassword" class="auth-input" placeholder="Enter password" required>
+                        <button type="button" class="auth-eye-btn" id="toggleLoginModalPassword" aria-label="Show password" aria-pressed="false">
+                            <i class="fas fa-eye" aria-hidden="true"></i>
+                        </button>
+                    </div>
                 </div>
                 <button type="submit" class="login-modal-action-btn primary auth-submit-btn">Login</button>
             </form>
@@ -375,13 +380,21 @@ if ($checkin_token !== '') {
                 </div>
                 <div class="auth-input-wrap auth-password-wrap">
                     <label class="auth-label" for="registerModalPassword">Password</label>
-                    <input type="password" name="password" id="registerModalPassword" class="auth-input" placeholder="Password" required>
-                    <button type="button" class="auth-eye-btn" id="toggleRegisterModalPassword" aria-label="Show password" aria-pressed="false">👁</button>
+                    <div class="auth-password-input-row">
+                        <input type="password" name="password" id="registerModalPassword" class="auth-input" placeholder="Password" required>
+                        <button type="button" class="auth-eye-btn" id="toggleRegisterModalPassword" aria-label="Show password" aria-pressed="false">
+                            <i class="fas fa-eye" aria-hidden="true"></i>
+                        </button>
+                    </div>
                 </div>
                 <div class="auth-input-wrap auth-password-wrap">
                     <label class="auth-label" for="registerModalConfirmPassword">Confirm Password</label>
-                    <input type="password" name="confirm_password" id="registerModalConfirmPassword" class="auth-input" placeholder="Confirm Password" required>
-                    <button type="button" class="auth-eye-btn" id="toggleRegisterModalConfirmPassword" aria-label="Show password" aria-pressed="false">👁</button>
+                    <div class="auth-password-input-row">
+                        <input type="password" name="confirm_password" id="registerModalConfirmPassword" class="auth-input" placeholder="Confirm Password" required>
+                        <button type="button" class="auth-eye-btn" id="toggleRegisterModalConfirmPassword" aria-label="Show password" aria-pressed="false">
+                            <i class="fas fa-eye" aria-hidden="true"></i>
+                        </button>
+                    </div>
                 </div>
                 <div class="auth-input-wrap">
                     <label class="auth-label" for="registerRoleSelectModal">Role</label>

@@ -5,6 +5,7 @@ let renderMiniCalendar = null; // Will be set by initMiniCalendar
 
 // Initialize on DOM ready
 document.addEventListener('DOMContentLoaded', function() {
+    initStudentSettings();
     initMiniCalendar();
     initFullCalendar();
     initViewButtons();
@@ -13,6 +14,64 @@ document.addEventListener('DOMContentLoaded', function() {
     initScanQRModal();
     initStudentUpcomingEventClicks();
 });
+
+function initStudentSettings() {
+    var form = document.getElementById('studentSettingsForm');
+    var updateBtn = document.getElementById('studentSettingsUpdateBtn');
+    var confirmModalEl = document.getElementById('confirmStudentSettingsModal');
+    var confirmYesBtn = document.getElementById('confirmStudentSettingsYesBtn');
+    var settings = window.__studentSettings || {};
+    var legend = document.getElementById('studentCalendarLegend');
+
+    if (legend && Number(settings.show_calendar_legend || 0) !== 1) {
+        legend.style.display = 'none';
+    }
+
+    if (!form || !updateBtn || !confirmModalEl || !confirmYesBtn || typeof bootstrap === 'undefined' || !bootstrap.Modal) {
+        return;
+    }
+
+    var confirmModal = bootstrap.Modal.getOrCreateInstance(confirmModalEl);
+    updateBtn.addEventListener('click', function () {
+        confirmModal.show();
+    });
+    confirmYesBtn.addEventListener('click', function () {
+        confirmModal.hide();
+        form.submit();
+    });
+
+    document.querySelectorAll('.password-toggle-btn[data-target]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var targetId = btn.getAttribute('data-target') || '';
+            var input = targetId ? document.getElementById(targetId) : null;
+            if (!input) return;
+            var icon = btn.querySelector('i');
+            var isHidden = input.type === 'password';
+            input.type = isHidden ? 'text' : 'password';
+            if (icon) {
+                icon.classList.toggle('fa-eye', !isHidden);
+                icon.classList.toggle('fa-eye-slash', isHidden);
+            }
+        });
+    });
+
+    var openModal = String(window.__studentOpenModal || '').toLowerCase();
+    if (openModal === 'change_password') {
+        var cpModalEl = document.getElementById('studentChangePasswordModal');
+        if (cpModalEl && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+            setTimeout(function () {
+                bootstrap.Modal.getOrCreateInstance(cpModalEl).show();
+            }, 180);
+        }
+    } else if (openModal === 'settings') {
+        var stModalEl = document.getElementById('settingsModal');
+        if (stModalEl && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+            setTimeout(function () {
+                bootstrap.Modal.getOrCreateInstance(stModalEl).show();
+            }, 180);
+        }
+    }
+}
 
 // ===============================
 // SCAN QR FOR ATTENDANCE
@@ -274,8 +333,14 @@ function initFullCalendar() {
     const calendarEl = document.getElementById('student-calendar');
     if (!calendarEl) return;
 
+    var settings = window.__studentSettings || {};
+    var allowedViews = ['dayGridMonth', 'timeGridWeek', 'timeGridDay'];
+    var defaultView = allowedViews.indexOf(String(settings.default_calendar_view || '')) !== -1
+        ? String(settings.default_calendar_view)
+        : 'dayGridMonth';
+
     calendar = new FullCalendar.Calendar(calendarEl, {
-        initialView: 'dayGridMonth',
+        initialView: defaultView,
         initialDate: currentDate,
         selectable: false, // Students can't create events
         dayMaxEvents: true,

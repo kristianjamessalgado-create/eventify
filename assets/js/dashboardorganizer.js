@@ -142,7 +142,14 @@ window.eventifyFillAndShowEventDetails = eventifyFillAndShowEventDetails;
 window.eventifyOpenEventDetailsById = eventifyOpenEventDetailsById;
 let currentDate = new Date();
 let selectedDate = new Date(); // highlighted day in mini calendar
-let selectedDepartment = 'ALL';
+let selectedDepartment = (function () {
+    var os = (typeof window !== 'undefined' && window.__organizerSettings) ? window.__organizerSettings : {};
+    var d = String(os.default_department_filter != null ? os.default_department_filter : 'ALL').trim();
+    if (!d) {
+        d = 'ALL';
+    }
+    return d;
+})();
 let renderMiniCalendar = null; // Will be set by initMiniCalendar
 
 function isSameDay(a, b) {
@@ -162,6 +169,21 @@ document.addEventListener('DOMContentLoaded', function() {
     initDepartmentFilter();
     initViewButtons();
     initCalendarNavigation();
+
+    var orgSettingsForm = document.getElementById('organizerSettingsForm');
+    var orgSettingsBtn = document.getElementById('organizerSettingsUpdateBtn');
+    var orgSettingsConfirmEl = document.getElementById('confirmOrganizerSettingsModal');
+    var orgSettingsConfirmYes = document.getElementById('confirmOrganizerSettingsYes');
+    if (orgSettingsForm && orgSettingsBtn && orgSettingsConfirmEl && orgSettingsConfirmYes && typeof bootstrap !== 'undefined') {
+        var orgSettingsConfirmModal = bootstrap.Modal.getOrCreateInstance(orgSettingsConfirmEl);
+        orgSettingsBtn.addEventListener('click', function () {
+            orgSettingsConfirmModal.show();
+        });
+        orgSettingsConfirmYes.addEventListener('click', function () {
+            orgSettingsConfirmModal.hide();
+            orgSettingsForm.submit();
+        });
+    }
 });
 
 // ===============================
@@ -320,6 +342,24 @@ function initFullCalendar() {
     const calendarEl = document.getElementById('calendar');
     if (!calendarEl) return;
 
+    const os = window.__organizerSettings || {};
+    const allowedViews = ['dayGridMonth', 'timeGridWeek', 'timeGridDay'];
+    let initView = String(os.default_calendar_view || '').trim();
+    if (!allowedViews.includes(initView)) {
+        initView = 'dayGridMonth';
+    }
+    const deptPref = String(os.default_department_filter || '').trim();
+    if (deptPref) {
+        const matchEl = Array.from(document.querySelectorAll('.calendar-item[data-dept]')).find(function (el) {
+            return (el.getAttribute('data-dept') || '') === deptPref;
+        });
+        if (matchEl) {
+            selectedDepartment = deptPref;
+        }
+    }
+    const showWeekends = !(os.show_weekends === 0 || os.show_weekends === false || String(os.show_weekends) === '0');
+    const weekStartsOn = parseInt(os.week_starts_on, 10) === 1 ? 1 : 0;
+
     // Filter events by selected department
     function getFilteredEvents() {
         if (!window.eventsData) return [];
@@ -333,7 +373,7 @@ function initFullCalendar() {
     }
 
     calendar = new FullCalendar.Calendar(calendarEl, {
-        initialView: 'dayGridMonth',
+        initialView: initView,
         initialDate: currentDate,
         selectable: true,
         selectMirror: true,
@@ -343,8 +383,8 @@ function initFullCalendar() {
         eventDisplay: 'block',
         height: 'auto',
         dayHeaderFormat: { weekday: 'long' },
-        firstDay: 0,
-        weekends: true,
+        firstDay: weekStartsOn,
+        weekends: showWeekends,
         nowIndicator: true,
         eventTimeFormat: {
             hour: 'numeric',
@@ -413,6 +453,14 @@ function initFullCalendar() {
 
     calendar.render();
     window.eventifyCalendar = calendar;
+
+    document.querySelectorAll('.calendar-item').forEach(function (i) {
+        i.classList.toggle('active', (i.getAttribute('data-dept') || '') === selectedDepartment);
+    });
+    document.querySelectorAll('.view-btn').forEach(function (b) {
+        const v = b.getAttribute('data-view');
+        b.classList.toggle('active', v === initView && v !== 'today');
+    });
 
     // Force initial sync (removes the hardcoded placeholder "September 2026")
     const focus = calendar.getDate ? calendar.getDate() : new Date();

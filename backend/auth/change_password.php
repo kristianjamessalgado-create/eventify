@@ -23,6 +23,21 @@ $new = (string)($_POST['new_password'] ?? '');
 $confirm = (string)($_POST['confirm_password'] ?? '');
 $next = trim((string)($_POST['next'] ?? ''));
 $from = trim((string)($_POST['from'] ?? ($_GET['from'] ?? '')));
+$returnTo = trim((string)($_POST['return_to'] ?? ''));
+
+function eventify_redirect_change_password(string $type, string $message, string $returnTo, string $next, string $from): void
+{
+    if ($returnTo === 'student_dashboard') {
+        $q = $type . '=' . urlencode($message) . '&open_modal=change_password';
+        header("Location: " . BASE_URL . "/backend/auth/dashboard_student.php?" . $q);
+        exit();
+    }
+
+    if ($type === 'error') {
+        header("Location: " . BASE_URL . "/views/change_password.php?error=" . urlencode($message) . "&next=" . urlencode($next) . "&from=" . urlencode($from));
+        exit();
+    }
+}
 
 if ($userId <= 0) {
     header("Location: " . BASE_URL . "/views/login.php?error=" . urlencode("Session expired."));
@@ -30,18 +45,15 @@ if ($userId <= 0) {
 }
 
 if ($new !== $confirm) {
-    header("Location: " . BASE_URL . "/views/change_password.php?error=" . urlencode("New passwords do not match.") . "&next=" . urlencode($next) . "&from=" . urlencode($from));
-    exit();
+    eventify_redirect_change_password('error', 'New passwords do not match.', $returnTo, $next, $from);
 }
 if (!preg_match('/[A-Z]/', $new) || !preg_match('/[\W_]/', $new) || strlen($new) < 8) {
-    header("Location: " . BASE_URL . "/views/change_password.php?error=" . urlencode("Password must contain at least 1 uppercase, 1 special character, and 8 characters.") . "&next=" . urlencode($next) . "&from=" . urlencode($from));
-    exit();
+    eventify_redirect_change_password('error', 'Password must contain at least 1 uppercase, 1 special character, and 8 characters.', $returnTo, $next, $from);
 }
 
 $stmt = $conn->prepare("SELECT password, COALESCE(must_change_password,0) AS must_change_password FROM users WHERE id = ? LIMIT 1");
 if (!$stmt) {
-    header("Location: " . BASE_URL . "/views/change_password.php?error=" . urlencode("Could not verify account."));
-    exit();
+    eventify_redirect_change_password('error', 'Could not verify account.', $returnTo, $next, $from);
 }
 $stmt->bind_param("i", $userId);
 $stmt->execute();
@@ -49,8 +61,7 @@ $row = $stmt->get_result()->fetch_assoc();
 $stmt->close();
 
 if (!$row) {
-    header("Location: " . BASE_URL . "/views/change_password.php?error=" . urlencode("User not found."));
-    exit();
+    eventify_redirect_change_password('error', 'User not found.', $returnTo, $next, $from);
 }
 
 $stored = (string)($row['password'] ?? '');
@@ -63,16 +74,14 @@ if (!$forceReset) {
         $validCurrent = true;
     }
     if (!$validCurrent) {
-        header("Location: " . BASE_URL . "/views/change_password.php?error=" . urlencode("Current password is incorrect.") . "&next=" . urlencode($next) . "&from=" . urlencode($from));
-        exit();
+        eventify_redirect_change_password('error', 'Current password is incorrect.', $returnTo, $next, $from);
     }
 }
 
 $newHash = password_hash($new, PASSWORD_DEFAULT);
 $up = $conn->prepare("UPDATE users SET password = ?, must_change_password = 0 WHERE id = ?");
 if (!$up) {
-    header("Location: " . BASE_URL . "/views/change_password.php?error=" . urlencode("Could not update password."));
-    exit();
+    eventify_redirect_change_password('error', 'Could not update password.', $returnTo, $next, $from);
 }
 $up->bind_param("si", $newHash, $userId);
 $up->execute();
@@ -88,6 +97,11 @@ if ($next !== '') {
         header("Location: " . $next);
         exit();
     }
+}
+
+if ($returnTo === 'student_dashboard') {
+    header("Location: " . BASE_URL . "/backend/auth/dashboard_student.php?msg=" . urlencode("Password updated successfully."));
+    exit();
 }
 
 header("Location: " . BASE_URL . "/index.php");

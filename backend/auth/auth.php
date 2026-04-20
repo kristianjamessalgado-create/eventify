@@ -137,7 +137,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     } elseif ($action === 'login') {
 
-        $email = trim($_POST['email'] ?? '');
+        $email = strtolower(trim($_POST['email'] ?? ''));
         $password = $_POST['password'] ?? '';
 
         $stmt = $conn->prepare("SELECT * FROM users WHERE email = ? LIMIT 1");
@@ -178,21 +178,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 if (!$password_ok) {
-                    // Handle failed attempts
-                    $attempts = $user['failed_attempts'] + 1;
+                    // Handle failed attempts per-account in DB (never shared across different emails).
+                    $uid = (int)($user['id'] ?? 0);
+                    $inc = $conn->prepare("
+                        UPDATE users
+                        SET failed_attempts = COALESCE(failed_attempts, 0) + 1,
+                            status = CASE
+                                WHEN COALESCE(failed_attempts, 0) + 1 >= 5 THEN 'inactive'
+                                ELSE status
+                            END
+                        WHERE id = ?
+                        LIMIT 1
+                    ");
+                    if ($inc) {
+                        $inc->bind_param("i", $uid);
+                        $inc->execute();
+                        $inc->close();
+                    }
+
+                    $attempts = (int)($user['failed_attempts'] ?? 0) + 1;
+                    $readAttempts = $conn->prepare("SELECT failed_attempts FROM users WHERE id = ? LIMIT 1");
+                    if ($readAttempts) {
+                        $readAttempts->bind_param("i", $uid);
+                        if ($readAttempts->execute()) {
+                            $raRes = $readAttempts->get_result();
+                            if ($raRes && ($ra = $raRes->fetch_assoc())) {
+                                $attempts = (int)($ra['failed_attempts'] ?? $attempts);
+                            }
+                        }
+                        $readAttempts->close();
+                    }
 
                     if ($attempts >= 5) {
-                        $update = $conn->prepare("UPDATE users SET failed_attempts=?, status='inactive' WHERE id=?");
-                        $update->bind_param("ii", $attempts, $user['id']);
-                        $update->execute();
-
                         $error = "Account locked due to multiple failed attempts.";
                     } else {
-                        $update = $conn->prepare("UPDATE users SET failed_attempts=? WHERE id=?");
-                        $update->bind_param("ii", $attempts, $user['id']);
-                        $update->execute();
-
-                        $remaining = 5 - $attempts;
+                        $remaining = max(0, 5 - $attempts);
                         $error = "Incorrect password. $remaining attempts left.";
                     }
                 } else {

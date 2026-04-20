@@ -8,6 +8,14 @@ include __DIR__ . '/../../config/config.php';
 include __DIR__ . '/../../config/csrf.php';
 include __DIR__ . '/../../backend/lib/activity_logger.php';
 
+function eventify_redirect_superadmin_role(string $type, string $message): void
+{
+    $openModal = trim((string)($_POST['open_modal'] ?? 'users'));
+    $q = $type . '=' . urlencode($message) . '&open_modal=' . urlencode($openModal);
+    header("Location: " . BASE_URL . "/backend/super_admin/dashboardsuperadmin.php?" . $q);
+    exit();
+}
+
 // Only super admin can change roles
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'super_admin') {
     header("Location: " . BASE_URL . "/views/login.php?error=Access denied");
@@ -15,13 +23,11 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'super_admin') {
 }
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    header("Location: " . BASE_URL . "/backend/super_admin/dashboardsuperadmin.php");
-    exit();
+    eventify_redirect_superadmin_role('error', 'Invalid request method.');
 }
 
 if (!csrf_validate()) {
-    header("Location: " . BASE_URL . "/backend/super_admin/dashboardsuperadmin.php?error=" . urlencode("Invalid request. Please try again."));
-    exit();
+    eventify_redirect_superadmin_role('error', 'Invalid request. Please try again.');
 }
 
 $userId   = isset($_POST['user_id']) ? (int)$_POST['user_id'] : 0;
@@ -30,14 +36,12 @@ $newRole  = $_POST['new_role'] ?? '';
 $allowedRoles = ['super_admin', 'admin', 'organizer', 'multimedia', 'student'];
 
 if ($userId <= 0 || !in_array($newRole, $allowedRoles, true)) {
-    header("Location: " . BASE_URL . "/backend/super_admin/dashboardsuperadmin.php?success=" . urlencode("Invalid role change request."));
-    exit();
+    eventify_redirect_superadmin_role('error', 'Invalid role change request.');
 }
 
 // Prevent changing own role to avoid locking yourself out accidentally
 if ($userId === (int)($_SESSION['user_id'] ?? 0)) {
-    header("Location: " . BASE_URL . "/backend/super_admin/dashboardsuperadmin.php?success=" . urlencode("You cannot change your own role."));
-    exit();
+    eventify_redirect_superadmin_role('error', 'You cannot change your own role.');
 }
 
 // Fetch current role
@@ -50,21 +54,18 @@ $stmt->close();
 
 if (!$currentRole) {
     $conn->close();
-    header("Location: " . BASE_URL . "/backend/super_admin/dashboardsuperadmin.php?success=" . urlencode("User not found."));
-    exit();
+    eventify_redirect_superadmin_role('error', 'User not found.');
 }
 
 if ($currentRole === $newRole) {
     $conn->close();
-    header("Location: " . BASE_URL . "/backend/super_admin/dashboardsuperadmin.php?success=" . urlencode("Role is already set to {$newRole}."));
-    exit();
+    eventify_redirect_superadmin_role('error', "Role is already set to {$newRole}.");
 }
 
 $stmtUpdate = $conn->prepare("UPDATE users SET role = ? WHERE id = ?");
 if (!$stmtUpdate) {
     $conn->close();
-    header("Location: " . BASE_URL . "/backend/super_admin/dashboardsuperadmin.php?success=" . urlencode("Failed to prepare role update."));
-    exit();
+    eventify_redirect_superadmin_role('error', 'Failed to prepare role update.');
 }
 
 $stmtUpdate->bind_param("si", $newRole, $userId);
@@ -78,13 +79,11 @@ if ($stmtUpdate->execute()) {
     log_activity($conn, $actorId, $actorRole, 'user_role_changed', 'user', $userId, $details);
 
     $conn->close();
-    header("Location: " . BASE_URL . "/backend/super_admin/dashboardsuperadmin.php?success=" . urlencode("User role updated."));
-    exit();
+    eventify_redirect_superadmin_role('success', 'User role updated.');
 }
 
 $stmtUpdate->close();
 $conn->close();
 
-header("Location: " . BASE_URL . "/backend/super_admin/dashboardsuperadmin.php?success=" . urlencode("Failed to update user role."));
-exit();
+eventify_redirect_superadmin_role('error', 'Failed to update user role.');
 

@@ -9,6 +9,7 @@ $user_name = $user_name ?? 'Student';
 $user      = $user ?? ['name' => 'Student', 'user_id' => 'N/A', 'department' => null];
 $events    = $events ?? []; // always an array
 $msg       = $msg ?? '';
+$error     = $error ?? '';
 $department = $user['department'] ?? null;
 $registered_event_ids   = $registered_event_ids ?? [];
 $reg_count_by_event     = $reg_count_by_event ?? [];
@@ -16,6 +17,7 @@ $feedback_submitted_ids = $feedback_submitted_ids ?? [];
 $student_notifications  = $student_notifications ?? [];
 $unread_notif_count     = isset($unread_notif_count) ? (int) $unread_notif_count : 0;
 $attendance_records = $attendance_records ?? [];
+$openModal = strtolower((string)($_GET['open_modal'] ?? ''));
 $today = date('Y-m-d');
 $upcoming_events = array_values(array_filter($events ?? [], function ($e) use ($today) {
     $d = $e['date'] ?? '';
@@ -221,6 +223,12 @@ $upcoming_events = array_values(array_filter($events ?? [], function ($e) use ($
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
         <?php endif; ?>
+        <?php if ($error): ?>
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <strong><?= htmlspecialchars($error) ?></strong>
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        <?php endif; ?>
 
         <!-- Upcoming Events List (at top for quick scan) -->
         <div class="upcoming-events-section">
@@ -264,6 +272,12 @@ $upcoming_events = array_values(array_filter($events ?? [], function ($e) use ($
                 <button class="view-btn" data-view="timeGridDay">Day</button>
                 <button class="view-btn" data-view="today">Today</button>
             </div>
+        </div>
+        <div class="student-calendar-legend" id="studentCalendarLegend">
+            <span><i class="fas fa-circle text-success me-1"></i>Active</span>
+            <span><i class="fas fa-circle text-warning me-1"></i>Upcoming</span>
+            <span><i class="fas fa-circle text-secondary me-1"></i>Closed/Completed</span>
+            <span><i class="fas fa-circle text-danger me-1"></i>Rejected</span>
         </div>
 
         <!-- FullCalendar Container -->
@@ -388,6 +402,8 @@ window.currentUser = {
     id: <?= json_encode($_SESSION['user_id'] ?? 0) ?>,
     department: <?= json_encode($department) ?>
 };
+window.__studentSettings = <?= json_encode($studentSettings ?? []) ?>;
+window.__studentOpenModal = <?= json_encode($openModal) ?>;
 </script>
 
 <!-- FullCalendar JS -->
@@ -413,19 +429,174 @@ window.currentUser = {
   </div>
 </div>
 
-<!-- Settings Modal (placeholder) -->
+<!-- Settings Modal -->
 <div class="modal fade" id="settingsModal" tabindex="-1" aria-labelledby="settingsModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <form id="studentSettingsForm" method="POST" action="<?= BASE_URL ?>/backend/auth/update_student_settings.php">
+        <?= csrf_field() ?>
+        <div class="modal-header">
+          <h5 class="modal-title" id="settingsModalLabel"><i class="fas fa-cog me-2"></i>Student Settings</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="student-settings-section">
+            <h6>Security</h6>
+            <p class="small text-muted mb-2">Manage account security options.</p>
+            <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#studentChangePasswordModal">
+              <i class="fas fa-key me-1"></i>Change Password
+            </button>
+          </div>
+
+          <div class="student-settings-section">
+            <h6>Notifications</h6>
+            <div class="form-check form-switch mb-2">
+              <input class="form-check-input" type="checkbox" id="event_reminders" name="event_reminders" value="1" <?= !empty($studentSettings['event_reminders']) ? 'checked' : '' ?>>
+              <label class="form-check-label" for="event_reminders">Event reminders</label>
+            </div>
+            <div class="form-check form-switch mb-2">
+              <input class="form-check-input" type="checkbox" id="rsvp_updates" name="rsvp_updates" value="1" <?= !empty($studentSettings['rsvp_updates']) ? 'checked' : '' ?>>
+              <label class="form-check-label" for="rsvp_updates">RSVP updates</label>
+            </div>
+            <div class="form-check form-switch mb-2">
+              <input class="form-check-input" type="checkbox" id="announcement_notifications" name="announcement_notifications" value="1" <?= !empty($studentSettings['announcement_notifications']) ? 'checked' : '' ?>>
+              <label class="form-check-label" for="announcement_notifications">Announcements</label>
+            </div>
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="notif_channel_email" name="notif_channel_email" value="1" <?= !empty($studentSettings['notif_channel_email']) ? 'checked' : '' ?>>
+              <label class="form-check-label" for="notif_channel_email">Enable email channel</label>
+            </div>
+          </div>
+
+          <div class="student-settings-section">
+            <h6>Calendar & Display</h6>
+            <div class="row g-2">
+              <div class="col-md-6">
+                <label class="form-label small" for="default_calendar_view">Default Calendar View</label>
+                <?php $stDefaultView = (string)($studentSettings['default_calendar_view'] ?? 'dayGridMonth'); ?>
+                <select class="form-select" id="default_calendar_view" name="default_calendar_view">
+                  <option value="dayGridMonth" <?= $stDefaultView === 'dayGridMonth' ? 'selected' : '' ?>>Month</option>
+                  <option value="timeGridWeek" <?= $stDefaultView === 'timeGridWeek' ? 'selected' : '' ?>>Week</option>
+                  <option value="timeGridDay" <?= $stDefaultView === 'timeGridDay' ? 'selected' : '' ?>>Day</option>
+                </select>
+              </div>
+              <div class="col-md-6 d-flex align-items-end">
+                <div class="form-check form-switch mb-2">
+                  <input class="form-check-input" type="checkbox" id="show_calendar_legend" name="show_calendar_legend" value="1" <?= !empty($studentSettings['show_calendar_legend']) ? 'checked' : '' ?>>
+                  <label class="form-check-label" for="show_calendar_legend">Show event legend</label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="student-settings-section">
+            <h6>RSVP Preferences</h6>
+            <div class="form-check form-switch mb-2">
+              <input class="form-check-input" type="checkbox" id="auto_add_rsvp_calendar" name="auto_add_rsvp_calendar" value="1" <?= !empty($studentSettings['auto_add_rsvp_calendar']) ? 'checked' : '' ?>>
+              <label class="form-check-label" for="auto_add_rsvp_calendar">Auto-add RSVP events to my calendar</label>
+            </div>
+            <div class="row g-2">
+              <div class="col-md-6">
+                <label class="form-label small" for="reminder_timing">Reminder timing</label>
+                <?php $stReminderTiming = (string)($studentSettings['reminder_timing'] ?? '1_day'); ?>
+                <select class="form-select" id="reminder_timing" name="reminder_timing">
+                  <option value="1_day" <?= $stReminderTiming === '1_day' ? 'selected' : '' ?>>1 day before</option>
+                  <option value="1_hour" <?= $stReminderTiming === '1_hour' ? 'selected' : '' ?>>1 hour before</option>
+                  <option value="30_min" <?= $stReminderTiming === '30_min' ? 'selected' : '' ?>>30 minutes before</option>
+                </select>
+              </div>
+              <div class="col-md-6 d-flex align-items-end">
+                <div class="form-check form-switch mb-2">
+                  <input class="form-check-input" type="checkbox" id="hide_past_rsvped" name="hide_past_rsvped" value="1" <?= !empty($studentSettings['hide_past_rsvped']) ? 'checked' : '' ?>>
+                  <label class="form-check-label" for="hide_past_rsvped">Hide past RSVPed events</label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="student-settings-section">
+            <h6>Privacy</h6>
+            <div class="form-check form-switch mb-2">
+              <input class="form-check-input" type="checkbox" id="share_profile_with_organizers" name="share_profile_with_organizers" value="1" <?= !empty($studentSettings['share_profile_with_organizers']) ? 'checked' : '' ?>>
+              <label class="form-check-label" for="share_profile_with_organizers">Show my profile info to organizers in attendee lists</label>
+            </div>
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="allow_photo_tagging" name="allow_photo_tagging" value="1" <?= !empty($studentSettings['allow_photo_tagging']) ? 'checked' : '' ?>>
+              <label class="form-check-label" for="allow_photo_tagging">Allow photo tagging consent</label>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-primary" id="studentSettingsUpdateBtn"><i class="fas fa-save me-1"></i>Update Settings</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Change Password Modal (Student) -->
+<div class="modal fade" id="studentChangePasswordModal" tabindex="-1" aria-labelledby="studentChangePasswordModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form method="POST" action="<?= BASE_URL ?>/backend/auth/change_password.php">
+        <?= csrf_field() ?>
+        <input type="hidden" name="return_to" value="student_dashboard">
+        <div class="modal-header">
+          <h5 class="modal-title" id="studentChangePasswordModalLabel"><i class="fas fa-key me-2"></i>Change Password</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-2">
+            <label class="form-label small" for="studentCurrentPassword">Current Password</label>
+            <div class="password-input-wrap">
+              <input type="password" class="form-control" id="studentCurrentPassword" name="current_password" required>
+              <button type="button" class="password-toggle-btn" data-target="studentCurrentPassword" aria-label="Show current password">
+                <i class="fas fa-eye"></i>
+              </button>
+            </div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label small" for="studentNewPassword">New Password</label>
+            <div class="password-input-wrap">
+              <input type="password" class="form-control" id="studentNewPassword" name="new_password" required>
+              <button type="button" class="password-toggle-btn" data-target="studentNewPassword" aria-label="Show new password">
+                <i class="fas fa-eye"></i>
+              </button>
+            </div>
+            <small class="text-muted">At least 8 chars, 1 uppercase, 1 special character.</small>
+          </div>
+          <div class="mb-0">
+            <label class="form-label small" for="studentConfirmPassword">Confirm New Password</label>
+            <div class="password-input-wrap">
+              <input type="password" class="form-control" id="studentConfirmPassword" name="confirm_password" required>
+              <button type="button" class="password-toggle-btn" data-target="studentConfirmPassword" aria-label="Show confirm password">
+                <i class="fas fa-eye"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary"><i class="fas fa-save me-1"></i>Update Password</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm student settings update -->
+<div class="modal fade" id="confirmStudentSettingsModal" tabindex="-1" aria-labelledby="confirmStudentSettingsModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title" id="settingsModalLabel">Settings</h5>
+        <h5 class="modal-title" id="confirmStudentSettingsModalLabel"><i class="fas fa-question-circle me-2 text-primary"></i>Confirm Update</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
-      <div class="modal-body">
-        <p class="mb-0 text-muted">Coming soon.</p>
-      </div>
+      <div class="modal-body">Are you sure you want to update your settings?</div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">No</button>
+        <button type="button" class="btn btn-primary" id="confirmStudentSettingsYesBtn">Yes, Update</button>
       </div>
     </div>
   </div>

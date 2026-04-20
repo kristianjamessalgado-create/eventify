@@ -1,6 +1,11 @@
 <?php
 $user = $user ?? ['name' => $user_name ?? 'Organizer', 'profile_picture' => null];
 $msg = $msg ?? '';
+$error = $error ?? '';
+$organizer_settings = $organizer_settings ?? [];
+$organizer_department_choices = $organizer_department_choices ?? [];
+$staff_messaging_unread = isset($staff_messaging_unread) ? (int) $staff_messaging_unread : 0;
+$messengerHref = BASE_URL . '/backend/messaging/staff_messenger.php';
 $fb = $feedbackStats ?? ['total_feedback' => 0, 'avg_rating' => 0, 'five_star' => 0];
 $eventsHasGeo = !empty($eventsHasGeo);
 ?>
@@ -48,6 +53,12 @@ $eventsHasGeo = !empty($eventsHasGeo);
         <button class="nav-btn" type="button" title="Calendar">
             <i class="fas fa-calendar"></i>
         </button>
+        <a class="nav-btn position-relative" title="Messages (Admin)" href="<?= htmlspecialchars($messengerHref) ?>" target="_blank" rel="noopener noreferrer">
+            <i class="fas fa-comments"></i>
+            <?php if ($staff_messaging_unread > 0): ?>
+                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size: 0.55rem;"><?= $staff_messaging_unread > 99 ? '99+' : $staff_messaging_unread ?></span>
+            <?php endif; ?>
+        </a>
         <?php $org_notifications = $organizer_notifications ?? []; ?>
         <div class="dropdown">
             <button class="nav-btn position-relative dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Notifications">
@@ -157,36 +168,37 @@ $eventsHasGeo = !empty($eventsHasGeo);
                 <input type="text" placeholder="Search" id="calendarSearch">
             </div>
             <div class="calendars-list" id="calendarsList">
-                <div class="calendar-item active" data-dept="ALL">
+                <?php $orgDept = (string)($organizer_settings['default_department_filter'] ?? 'ALL'); ?>
+                <div class="calendar-item<?= $orgDept === 'ALL' ? ' active' : '' ?>" data-dept="ALL">
                     <div class="calendar-avatar" style="background: #7c3aed;">A</div>
                     <span class="calendar-name">All Departments</span>
                     <i class="fas fa-check"></i>
                 </div>
-                <div class="calendar-item" data-dept="High school department">
+                <div class="calendar-item<?= $orgDept === 'High school department' ? ' active' : '' ?>" data-dept="High school department">
                     <div class="calendar-avatar" style="background: #3b82f6;">H</div>
                     <span class="calendar-name">High School Department</span>
                 </div>
-                <div class="calendar-item" data-dept="College of Communication, Information and Technology">
+                <div class="calendar-item<?= $orgDept === 'College of Communication, Information and Technology' ? ' active' : '' ?>" data-dept="College of Communication, Information and Technology">
                     <div class="calendar-avatar" style="background: #10b981;">C</div>
                     <span class="calendar-name">College of Communication, Information and Technology</span>
                 </div>
-                <div class="calendar-item" data-dept="College of Accountancy and Business">
+                <div class="calendar-item<?= $orgDept === 'College of Accountancy and Business' ? ' active' : '' ?>" data-dept="College of Accountancy and Business">
                     <div class="calendar-avatar" style="background: #f59e0b;">A</div>
                     <span class="calendar-name">College of Accountancy and Business</span>
                 </div>
-                <div class="calendar-item" data-dept="School of Law and Political Science">
+                <div class="calendar-item<?= $orgDept === 'School of Law and Political Science' ? ' active' : '' ?>" data-dept="School of Law and Political Science">
                     <div class="calendar-avatar" style="background: #ef4444;">L</div>
                     <span class="calendar-name">School of Law and Political Science</span>
                 </div>
-                <div class="calendar-item" data-dept="College of Education">
+                <div class="calendar-item<?= $orgDept === 'College of Education' ? ' active' : '' ?>" data-dept="College of Education">
                     <div class="calendar-avatar" style="background: #6366f1;">E</div>
                     <span class="calendar-name">College of Education</span>
                 </div>
-                <div class="calendar-item" data-dept="College of Nursing and Allied health sciences">
+                <div class="calendar-item<?= $orgDept === 'College of Nursing and Allied health sciences' ? ' active' : '' ?>" data-dept="College of Nursing and Allied health sciences">
                     <div class="calendar-avatar" style="background: #14b8a6;">N</div>
                     <span class="calendar-name">College of Nursing and Allied health sciences</span>
                 </div>
-                <div class="calendar-item" data-dept="College of Hospitality Management">
+                <div class="calendar-item<?= $orgDept === 'College of Hospitality Management' ? ' active' : '' ?>" data-dept="College of Hospitality Management">
                     <div class="calendar-avatar" style="background: #f97316;">H</div>
                     <span class="calendar-name">College of Hospitality Management</span>
                 </div>
@@ -208,6 +220,10 @@ $eventsHasGeo = !empty($eventsHasGeo);
                 <i class="fas fa-star-half-stroke"></i>
                 <span>Feedback insights</span>
             </button>
+            <a class="action-btn text-decoration-none text-reset" href="<?= htmlspecialchars($messengerHref) ?>" target="_blank" rel="noopener noreferrer">
+                <i class="fas fa-comments"></i>
+                <span>Messages<?= $staff_messaging_unread > 0 ? ' (' . $staff_messaging_unread . ')' : '' ?></span>
+            </a>
             <a href="#" class="action-btn" data-bs-toggle="modal" data-bs-target="#logoutModal">
                 <i class="fas fa-sign-out-alt"></i>
                 <span>Logout</span>
@@ -223,6 +239,12 @@ $eventsHasGeo = !empty($eventsHasGeo);
                 <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
             </div>
         <?php endif; ?>
+        <?php if (!empty($error)): ?>
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <?= htmlspecialchars($error) ?>
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        <?php endif; ?>
 
         <!-- Calendar Controls (center calendar on dashboard again) -->
         <div class="calendar-controls">
@@ -232,9 +254,10 @@ $eventsHasGeo = !empty($eventsHasGeo);
                 <button class="control-nav" id="calNext"><i class="fas fa-chevron-right"></i></button>
             </div>
             <div class="controls-right">
-                <button class="view-btn active" data-view="dayGridMonth">Month</button>
-                <button class="view-btn" data-view="timeGridWeek">Week</button>
-                <button class="view-btn" data-view="timeGridDay">Day</button>
+                <?php $orgCalView = (string)($organizer_settings['default_calendar_view'] ?? 'dayGridMonth'); ?>
+                <button class="view-btn<?= $orgCalView === 'dayGridMonth' ? ' active' : '' ?>" data-view="dayGridMonth">Month</button>
+                <button class="view-btn<?= $orgCalView === 'timeGridWeek' ? ' active' : '' ?>" data-view="timeGridWeek">Week</button>
+                <button class="view-btn<?= $orgCalView === 'timeGridDay' ? ' active' : '' ?>" data-view="timeGridDay">Day</button>
                 <button class="view-btn" data-view="today">Today</button>
             </div>
         </div>
@@ -453,19 +476,95 @@ $eventsHasGeo = !empty($eventsHasGeo);
   </div>
 </div>
 
-<!-- Settings Modal (placeholder) -->
+<!-- Organizer Settings -->
 <div class="modal fade" id="settingsModal" tabindex="-1" aria-labelledby="settingsModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <form id="organizerSettingsForm" method="POST" action="<?= BASE_URL ?>/backend/auth/update_organizer_settings.php">
+        <?= csrf_field() ?>
+        <div class="modal-header">
+          <h5 class="modal-title" id="settingsModalLabel"><i class="fas fa-cog me-2"></i>Organizer Settings</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="organizer-settings-section">
+            <h6>Security</h6>
+            <p class="small text-muted mb-2">Change your account password.</p>
+            <a class="btn btn-outline-primary btn-sm" href="<?= BASE_URL ?>/views/change_password.php?from=organizer&amp;next=<?= urlencode(BASE_URL . '/backend/auth/dashboardorganizer.php') ?>">
+              <i class="fas fa-key me-1"></i>Change Password
+            </a>
+          </div>
+
+          <div class="organizer-settings-section">
+            <h6>Calendar</h6>
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label small" for="org_default_calendar_view">Default view</label>
+                <?php $ocv = (string)($organizer_settings['default_calendar_view'] ?? 'dayGridMonth'); ?>
+                <select class="form-select" id="org_default_calendar_view" name="default_calendar_view">
+                  <option value="dayGridMonth" <?= $ocv === 'dayGridMonth' ? 'selected' : '' ?>>Month</option>
+                  <option value="timeGridWeek" <?= $ocv === 'timeGridWeek' ? 'selected' : '' ?>>Week</option>
+                  <option value="timeGridDay" <?= $ocv === 'timeGridDay' ? 'selected' : '' ?>>Day</option>
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label small" for="org_default_department_filter">Default department filter</label>
+                <select class="form-select" id="org_default_department_filter" name="default_department_filter">
+                  <?php foreach ($organizer_department_choices as $val => $label): ?>
+                    <option value="<?= htmlspecialchars($val) ?>" <?= ((string)($organizer_settings['default_department_filter'] ?? 'ALL') === $val) ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+            </div>
+            <div class="form-check form-switch mt-3">
+              <input class="form-check-input" type="checkbox" id="org_show_weekends" name="show_weekends" value="1" <?= !empty($organizer_settings['show_weekends']) ? 'checked' : '' ?>>
+              <label class="form-check-label" for="org_show_weekends">Show weekends on calendar</label>
+            </div>
+            <div class="mt-2">
+              <label class="form-label small" for="org_week_starts_on">Week starts on</label>
+              <?php $wso = (int)($organizer_settings['week_starts_on'] ?? 0); ?>
+              <select class="form-select" id="org_week_starts_on" name="week_starts_on">
+                <option value="0" <?= $wso === 0 ? 'selected' : '' ?>>Sunday</option>
+                <option value="1" <?= $wso === 1 ? 'selected' : '' ?>>Monday</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="organizer-settings-section">
+            <h6>Notifications (email)</h6>
+            <p class="small text-muted mb-2">Preferences for future email notifications. In-app notifications are unchanged.</p>
+            <div class="form-check form-switch mb-2">
+              <input class="form-check-input" type="checkbox" id="org_notify_email_event_status" name="notify_email_event_status" value="1" <?= !empty($organizer_settings['notify_email_event_status']) ? 'checked' : '' ?>>
+              <label class="form-check-label" for="org_notify_email_event_status">Event status updates (approved, rejected, etc.)</label>
+            </div>
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="org_notify_email_feedback" name="notify_email_feedback" value="1" <?= !empty($organizer_settings['notify_email_feedback']) ? 'checked' : '' ?>>
+              <label class="form-check-label" for="org_notify_email_feedback">New feedback on my events</label>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          <button type="button" class="btn btn-primary" id="organizerSettingsUpdateBtn"><i class="fas fa-save me-1"></i>Save settings</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="confirmOrganizerSettingsModal" tabindex="-1" aria-labelledby="confirmOrganizerSettingsLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title" id="settingsModalLabel">Settings</h5>
+        <h5 class="modal-title" id="confirmOrganizerSettingsLabel"><i class="fas fa-question-circle me-2 text-primary"></i>Save settings?</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
-        <p class="mb-0 text-muted">Coming soon.</p>
+        <p class="mb-0">Your calendar defaults and notification preferences will be updated.</p>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="confirmOrganizerSettingsYes">Yes, save</button>
       </div>
     </div>
   </div>
@@ -592,6 +691,7 @@ $eventsHasGeo = !empty($eventsHasGeo);
 <!-- Pass PHP events to JS -->
 <script>
 window.BASE_URL = <?= json_encode(BASE_URL) ?>;
+window.csrfToken = <?= json_encode(function_exists('csrf_token') ? csrf_token() : '') ?>;
 window.eventsData = <?= json_encode(array_map(function($e) use ($user_name) {
     return [
         'id'    => $e['id'],
@@ -621,6 +721,7 @@ window.currentUser = {
     id: <?= json_encode($_SESSION['user_id'] ?? 0) ?>
 };
 window.currentRole = 'organizer';
+window.__organizerSettings = <?= json_encode($organizer_settings, JSON_HEX_TAG|JSON_HEX_APOS|JSON_HEX_QUOT|JSON_HEX_AMP) ?>;
 </script>
 
 <!-- Event Details Modal -->

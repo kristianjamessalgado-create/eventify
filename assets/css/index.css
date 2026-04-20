@@ -698,7 +698,10 @@ p {
     padding: 46px 14px 14px;
     background: linear-gradient(180deg, rgba(8, 18, 32, 0.93), rgba(7, 16, 29, 0.95));
     border-radius: 18px;
-    overflow: hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
     box-shadow:
         0 26px 64px rgba(0, 0, 0, 0.45),
         0 0 0 1px rgba(56, 189, 248, 0.12);
@@ -794,7 +797,11 @@ p {
     position: relative;
 }
 
-.auth-password-wrap .auth-input {
+.auth-password-input-row {
+    position: relative;
+}
+
+.auth-password-input-row .auth-input {
     padding-right: 42px;
 }
 
@@ -815,6 +822,11 @@ p {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+}
+
+.auth-eye-btn i {
+    font-size: 14px;
+    pointer-events: none;
 }
 
 .auth-eye-btn:hover {

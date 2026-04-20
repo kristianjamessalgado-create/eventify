@@ -53,6 +53,64 @@ $user_name  = $user['name'] ?? 'Student';
 $department = $user['department'] ?? null;
 $events     = [];
 $msg        = $_GET['msg'] ?? '';
+$error      = $_GET['error'] ?? '';
+
+// Student settings (lazy migration + defaults for backward compatibility)
+$studentSettings = [
+    'event_reminders' => 1,
+    'rsvp_updates' => 1,
+    'announcement_notifications' => 1,
+    'notif_channel_email' => 1,
+    'default_calendar_view' => 'dayGridMonth',
+    'show_calendar_legend' => 1,
+    'auto_add_rsvp_calendar' => 1,
+    'reminder_timing' => '1_day',
+    'hide_past_rsvped' => 0,
+    'share_profile_with_organizers' => 1,
+    'allow_photo_tagging' => 1,
+];
+try {
+    $conn->query("
+        CREATE TABLE IF NOT EXISTS student_settings (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL UNIQUE,
+            event_reminders TINYINT(1) NOT NULL DEFAULT 1,
+            rsvp_updates TINYINT(1) NOT NULL DEFAULT 1,
+            announcement_notifications TINYINT(1) NOT NULL DEFAULT 1,
+            notif_channel_email TINYINT(1) NOT NULL DEFAULT 1,
+            default_calendar_view VARCHAR(20) NOT NULL DEFAULT 'dayGridMonth',
+            show_calendar_legend TINYINT(1) NOT NULL DEFAULT 1,
+            auto_add_rsvp_calendar TINYINT(1) NOT NULL DEFAULT 1,
+            reminder_timing VARCHAR(20) NOT NULL DEFAULT '1_day',
+            hide_past_rsvped TINYINT(1) NOT NULL DEFAULT 0,
+            share_profile_with_organizers TINYINT(1) NOT NULL DEFAULT 1,
+            allow_photo_tagging TINYINT(1) NOT NULL DEFAULT 1,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            CONSTRAINT fk_student_settings_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+    $stmtSettings = $conn->prepare("
+        SELECT event_reminders, rsvp_updates, announcement_notifications, notif_channel_email,
+               default_calendar_view, show_calendar_legend, auto_add_rsvp_calendar, reminder_timing,
+               hide_past_rsvped, share_profile_with_organizers, allow_photo_tagging
+        FROM student_settings
+        WHERE user_id = ?
+        LIMIT 1
+    ");
+    if ($stmtSettings) {
+        $stmtSettings->bind_param('i', $session_user_id);
+        if ($stmtSettings->execute()) {
+            $resSettings = $stmtSettings->get_result();
+            if ($resSettings && ($settingsRow = $resSettings->fetch_assoc())) {
+                $studentSettings = array_merge($studentSettings, $settingsRow);
+            }
+        }
+        $stmtSettings->close();
+    }
+} catch (Throwable $e) {
+    // Keep dashboard available when settings table is unavailable.
+}
 
 // Fetch events filtered by student's department
 if ($department) {

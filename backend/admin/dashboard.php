@@ -7,6 +7,7 @@ include __DIR__ . '/../../config/db.php';
 include __DIR__ . '/../../config/config.php';
 include __DIR__ . '/../../config/csrf.php';
 require_once __DIR__ . '/../lib/event_status_auto.php';
+require_once __DIR__ . '/../lib/staff_messaging.php';
 
 // Only admin users can access this dashboard
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
@@ -64,6 +65,73 @@ $stmt->close();
 
 $admin_name  = $db_name ?: 'Admin';
 $admin_email = $db_email ?: '';
+
+// Admin settings (created lazily for backwards compatibility)
+$adminSettings = [
+    'notify_email_new_event' => 1,
+    'notify_pending_reminder' => 1,
+    'notification_retention_days' => 30,
+    'otp_required_sensitive_actions' => 1,
+    'otp_expiry_minutes' => 10,
+    'otp_max_attempts' => 5,
+    'event_lead_days' => 3,
+    'auto_complete_past_events' => 1,
+    'max_event_photos' => 10,
+    'max_upload_size_mb' => 10,
+    'session_timeout_minutes' => 30,
+    'force_relogin_sensitive_actions' => 1,
+    'default_dashboard_view' => 'calendar',
+    'calendar_legend_visible' => 1,
+    'table_page_size' => 10,
+];
+try {
+    $conn->query("
+        CREATE TABLE IF NOT EXISTS admin_settings (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            admin_user_id INT NOT NULL UNIQUE,
+            notify_email_new_event TINYINT(1) NOT NULL DEFAULT 1,
+            notify_pending_reminder TINYINT(1) NOT NULL DEFAULT 1,
+            notification_retention_days INT NOT NULL DEFAULT 30,
+            otp_required_sensitive_actions TINYINT(1) NOT NULL DEFAULT 1,
+            otp_expiry_minutes INT NOT NULL DEFAULT 10,
+            otp_max_attempts INT NOT NULL DEFAULT 5,
+            event_lead_days INT NOT NULL DEFAULT 3,
+            auto_complete_past_events TINYINT(1) NOT NULL DEFAULT 1,
+            max_event_photos INT NOT NULL DEFAULT 10,
+            max_upload_size_mb INT NOT NULL DEFAULT 10,
+            session_timeout_minutes INT NOT NULL DEFAULT 30,
+            force_relogin_sensitive_actions TINYINT(1) NOT NULL DEFAULT 1,
+            default_dashboard_view VARCHAR(20) NOT NULL DEFAULT 'calendar',
+            calendar_legend_visible TINYINT(1) NOT NULL DEFAULT 1,
+            table_page_size INT NOT NULL DEFAULT 10,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            CONSTRAINT fk_admin_settings_user FOREIGN KEY (admin_user_id) REFERENCES users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+    $stmtSettings = $conn->prepare("
+        SELECT notify_email_new_event, notify_pending_reminder, notification_retention_days,
+               otp_required_sensitive_actions, otp_expiry_minutes, otp_max_attempts,
+               event_lead_days, auto_complete_past_events, max_event_photos, max_upload_size_mb,
+               session_timeout_minutes, force_relogin_sensitive_actions, default_dashboard_view,
+               calendar_legend_visible, table_page_size
+        FROM admin_settings
+        WHERE admin_user_id = ?
+        LIMIT 1
+    ");
+    if ($stmtSettings) {
+        $stmtSettings->bind_param('i', $session_user_id);
+        if ($stmtSettings->execute()) {
+            $resSettings = $stmtSettings->get_result();
+            if ($resSettings && ($settingsRow = $resSettings->fetch_assoc())) {
+                $adminSettings = array_merge($adminSettings, $settingsRow);
+            }
+        }
+        $stmtSettings->close();
+    }
+} catch (Throwable $e) {
+    // Dashboard should remain available even if settings table is unavailable.
+}
 
 // Admin in-app notifications
 $admin_notifications = [];
@@ -155,7 +223,7 @@ if ($stmtUp) {
 $upcomingAdminCount = count($upcomingAdminEvents);
 
 // Event stats for dashboard cards
-$eventStats = ['total' => 0, 'pending' => 0, 'active' => 0, 'rejected' => 0, 'closed' => 0];
+$eventStats = ['total' => 0, 'pending' => 0, 'active' => 0, 'rejected' => 0, 'closed' => 0, 'completed' => 0];
 $resStats = $conn->query("SELECT status, COUNT(*) AS cnt FROM events GROUP BY status");
 if ($resStats) {
     while ($row = $resStats->fetch_assoc()) {
@@ -165,6 +233,8 @@ if ($resStats) {
         }
     }
 }
+// Treat completed as closed for legacy card labels.
+$eventStats['closed'] += (int)($eventStats['completed'] ?? 0);
 
 // Chart data: events by department
 $chartDeptLabels = [];
@@ -218,6 +288,37 @@ try {
     }
 } catch (Throwable $e) {
     // Keep dashboard available even when event_feedback is not migrated.
+}
+
+// Admin ↔ Organizer messaging (organizer list + unread count)
+$messaging_organizers = [];
+$staff_messaging_unread = 0;
+try {
+    if (eventify_staff_messages_ensure_table($conn)) {
+        $oq = $conn->query("SELECT id, name, email FROM users WHERE role = 'organizer' ORDER BY name ASC LIMIT 500");
+        if ($oq) {
+            while ($r = $oq->fetch_assoc()) {
+                $messaging_organizers[] = $r;
+            }
+        }
+        $uc = $conn->prepare("
+            SELECT COUNT(*) AS c FROM staff_messages m
+            INNER JOIN users u ON u.id = m.sender_id AND u.role = 'organizer'
+            WHERE m.recipient_id = ? AND m.read_at IS NULL
+        ");
+        if ($uc) {
+            $uc->bind_param('i', $session_user_id);
+            $uc->execute();
+            $ur = $uc->get_result();
+            if ($ur && ($row = $ur->fetch_assoc())) {
+                $staff_messaging_unread = (int)($row['c'] ?? 0);
+            }
+            $uc->close();
+        }
+    }
+} catch (Throwable $e) {
+    $messaging_organizers = [];
+    $staff_messaging_unread = 0;
 }
 
 // Recent audit log entries (shown in dashboard modal)

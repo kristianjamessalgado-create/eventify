@@ -916,3 +916,31 @@ body, html {
     overflow-y: auto;
     z-index: 2;
 }
+
+/* Organizer settings modal */
+#settingsModal .modal-body {
+    background: #f8fafc;
+    max-height: min(70vh, 560px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+}
+
+.organizer-settings-section {
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    background: #ffffff;
+    padding: 0.85rem 1rem;
+    margin-bottom: 0.85rem;
+}
+
+.organizer-settings-section:last-child {
+    margin-bottom: 0;
+}
+
+.organizer-settings-section h6 {
+    margin-bottom: 0.5rem;
+    font-weight: 700;
+    color: #0f172a;
+    font-size: 0.95rem;
+}

@@ -8,27 +8,32 @@ include __DIR__ . '/../../config/config.php';
 include __DIR__ . '/../../config/csrf.php';
 include __DIR__ . '/../../backend/lib/activity_logger.php';
 
+function eventify_redirect_superadmin_activate(string $type, string $message): void
+{
+    $openModal = trim((string)($_POST['open_modal'] ?? 'users'));
+    $q = $type . '=' . urlencode($message) . '&open_modal=' . urlencode($openModal);
+    header("Location: " . BASE_URL . "/backend/super_admin/dashboardsuperadmin.php?" . $q);
+    exit();
+}
+
 if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'super_admin') {
     header("Location: " . BASE_URL . "/views/login.php?error=Access denied");
     exit();
 }
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !csrf_validate()) {
-    header("Location: " . BASE_URL . "/backend/super_admin/dashboardsuperadmin.php?success=" . urlencode("Invalid request."));
-    exit();
+    eventify_redirect_superadmin_activate('error', 'Invalid request.');
 }
 
 $id = (int)($_POST['id'] ?? 0);
 if ($id <= 0) {
-    header("Location: " . BASE_URL . "/backend/super_admin/dashboardsuperadmin.php?success=" . urlencode("Invalid user ID."));
-    exit();
+    eventify_redirect_superadmin_activate('error', 'Invalid user ID.');
 }
 
 $userStmt = $conn->prepare("SELECT id, email, status, failed_attempts FROM users WHERE id = ? LIMIT 1");
 if (!$userStmt) {
     $conn->close();
-    header("Location: " . BASE_URL . "/backend/super_admin/dashboardsuperadmin.php?success=" . urlencode("Failed to validate user for activation."));
-    exit();
+    eventify_redirect_superadmin_activate('error', 'Failed to validate user for activation.');
 }
 $userStmt->bind_param("i", $id);
 $userStmt->execute();
@@ -36,8 +41,7 @@ $user = $userStmt->get_result()->fetch_assoc();
 $userStmt->close();
 if (!$user) {
     $conn->close();
-    header("Location: " . BASE_URL . "/backend/super_admin/dashboardsuperadmin.php?success=" . urlencode("User not found."));
-    exit();
+    eventify_redirect_superadmin_activate('error', 'User not found.');
 }
 
 $isLockedAccount = ((int)($user['failed_attempts'] ?? 0) >= 5);
@@ -54,8 +58,7 @@ if ($isLockedAccount) {
     ");
     if (!$otpStmt) {
         $conn->close();
-        header("Location: " . BASE_URL . "/backend/super_admin/dashboardsuperadmin.php?success=" . urlencode("Cannot activate locked account: OTP validation unavailable."));
-        exit();
+        eventify_redirect_superadmin_activate('error', 'Cannot activate locked account: OTP validation unavailable.');
     }
     $otpStmt->bind_param("i", $id);
     $otpStmt->execute();
@@ -64,20 +67,23 @@ if ($isLockedAccount) {
 
     if (!$otpVerified) {
         $conn->close();
-        header("Location: " . BASE_URL . "/backend/super_admin/dashboardsuperadmin.php?success=" . urlencode("Cannot activate yet: reactivation OTP not verified."));
-        exit();
+        eventify_redirect_superadmin_activate('error', 'Cannot activate yet: reactivation OTP not verified.');
     }
 }
 
-$stmt = $conn->prepare("UPDATE users SET status = 'active', failed_attempts = 0 WHERE id = ?");
+$stmt = $conn->prepare("UPDATE users SET status = 'active', failed_attempts = 0 WHERE id = ? AND status <> 'active'");
 if (!$stmt) {
     $conn->close();
-    header("Location: " . BASE_URL . "/backend/super_admin/dashboardsuperadmin.php?success=" . urlencode("Failed to prepare activation."));
-    exit();
+    eventify_redirect_superadmin_activate('error', 'Failed to prepare activation.');
 }
 $stmt->bind_param("i", $id);
 $stmt->execute();
+$changed = $stmt->affected_rows > 0;
 $stmt->close();
+if (!$changed) {
+    $conn->close();
+    eventify_redirect_superadmin_activate('error', 'No changes made. User may already be active.');
+}
 
 log_activity(
     $conn,
@@ -90,5 +96,4 @@ log_activity(
 );
 
 $conn->close();
-header("Location: " . BASE_URL . "/backend/super_admin/dashboardsuperadmin.php?success=" . urlencode("User activated."));
-exit();
+eventify_redirect_superadmin_activate('success', 'User activated.');

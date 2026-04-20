@@ -108,7 +108,12 @@ document.addEventListener('DOMContentLoaded', function () {
             const show = inputEl.type === 'password';
             inputEl.type = show ? 'text' : 'password';
             buttonEl.setAttribute('aria-pressed', show ? 'true' : 'false');
-            buttonEl.textContent = show ? '🙈' : '👁';
+            buttonEl.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+            var icon = buttonEl.querySelector('i');
+            if (icon) {
+                icon.classList.toggle('fa-eye', !show);
+                icon.classList.toggle('fa-eye-slash', show);
+            }
             inputEl.focus();
         });
     }

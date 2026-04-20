@@ -149,7 +149,7 @@ if ($resLogs = $conn->query($sqlLogs)) {
 
 // User counts by role and status
 $userStats = [
-    'total'        => count($users),
+    'total'        => (int)$usersTotal,
     'super_admin'  => 0,
     'admin'        => 0,
     'organizer'    => 0,
@@ -187,6 +187,7 @@ $eventStats = [
     'active'   => 0,
     'rejected' => 0,
     'closed'   => 0,
+    'completed'=> 0,
 ];
 $sqlEvents = "
     SELECT status, COUNT(*) AS cnt
@@ -203,6 +204,8 @@ if ($resEvents = $conn->query($sqlEvents)) {
         }
     }
 }
+// Treat completed as closed in super-admin analytics for compatibility.
+$eventStats['closed'] += (int)($eventStats['completed'] ?? 0);
 
 $saEventStatusLabels = ['Pending', 'Active', 'Rejected', 'Closed'];
 $saEventStatusCounts = [
@@ -230,6 +233,7 @@ if ($resLogins = $conn->query($sqlLoginsToday)) {
 
 // Success message
 $success = $_GET['success'] ?? '';
+$error = $_GET['error'] ?? '';
 
 // Load view
 define('EVENTIFY_SUPERADMIN_DASHBOARD_LOADED', true);

@@ -3,7 +3,9 @@ session_start();
 include __DIR__ . '/../../config/db.php';
 include __DIR__ . '/../../config/config.php';
 include __DIR__ . '/../../config/csrf.php';
+require_once __DIR__ . '/../../config/organizer_departments.php';
 require_once __DIR__ . '/../lib/event_status_auto.php';
+require_once __DIR__ . '/../lib/staff_messaging.php';
 
 
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'organizer') {
@@ -178,10 +180,90 @@ try {
     $eventsHasGeo = false;
 }
 
+// Admin ↔ Organizer messaging
+$messaging_admins = [];
+$staff_messaging_unread = 0;
+try {
+    if (eventify_staff_messages_ensure_table($conn)) {
+        $aq = $conn->query("SELECT id, name, email FROM users WHERE role = 'admin' ORDER BY name ASC LIMIT 50");
+        if ($aq) {
+            while ($r = $aq->fetch_assoc()) {
+                $messaging_admins[] = $r;
+            }
+        }
+        $uc = $conn->prepare("
+            SELECT COUNT(*) AS c FROM staff_messages m
+            INNER JOIN users u ON u.id = m.sender_id AND u.role = 'admin'
+            WHERE m.recipient_id = ? AND m.read_at IS NULL
+        ");
+        if ($uc) {
+            $uc->bind_param('i', $session_user_id);
+            $uc->execute();
+            $ur = $uc->get_result();
+            if ($ur && ($row = $ur->fetch_assoc())) {
+                $staff_messaging_unread = (int)($row['c'] ?? 0);
+            }
+            $uc->close();
+        }
+    }
+} catch (Throwable $e) {
+    $messaging_admins = [];
+    $staff_messaging_unread = 0;
+}
+
+$organizer_department_choices = eventify_organizer_department_choices();
+$organizer_settings = [
+    'default_calendar_view' => 'dayGridMonth',
+    'default_department_filter' => 'ALL',
+    'show_weekends' => 1,
+    'week_starts_on' => 0,
+    'notify_email_event_status' => 1,
+    'notify_email_feedback' => 1,
+];
+try {
+    $conn->query("
+        CREATE TABLE IF NOT EXISTS organizer_settings (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL UNIQUE,
+            default_calendar_view VARCHAR(20) NOT NULL DEFAULT 'dayGridMonth',
+            default_department_filter VARCHAR(120) NOT NULL DEFAULT 'ALL',
+            show_weekends TINYINT(1) NOT NULL DEFAULT 1,
+            week_starts_on TINYINT NOT NULL DEFAULT 0,
+            notify_email_event_status TINYINT(1) NOT NULL DEFAULT 1,
+            notify_email_feedback TINYINT(1) NOT NULL DEFAULT 1,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            CONSTRAINT fk_organizer_settings_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+    $osStmt = $conn->prepare("
+        SELECT default_calendar_view, default_department_filter, show_weekends, week_starts_on,
+               notify_email_event_status, notify_email_feedback
+        FROM organizer_settings WHERE user_id = ? LIMIT 1
+    ");
+    if ($osStmt) {
+        $osStmt->bind_param('i', $session_user_id);
+        $osStmt->execute();
+        $osRow = $osStmt->get_result()->fetch_assoc();
+        $osStmt->close();
+        if ($osRow) {
+            $v = (string)($osRow['default_calendar_view'] ?? 'dayGridMonth');
+            $organizer_settings['default_calendar_view'] = in_array($v, ['dayGridMonth', 'timeGridWeek', 'timeGridDay'], true) ? $v : 'dayGridMonth';
+            $d = trim((string)($osRow['default_department_filter'] ?? 'ALL'));
+            $organizer_settings['default_department_filter'] = array_key_exists($d, $organizer_department_choices) ? $d : 'ALL';
+            $organizer_settings['show_weekends'] = (int)!empty($osRow['show_weekends']);
+            $organizer_settings['week_starts_on'] = ((int)($osRow['week_starts_on'] ?? 0) === 1) ? 1 : 0;
+            $organizer_settings['notify_email_event_status'] = (int)!empty($osRow['notify_email_event_status']);
+            $organizer_settings['notify_email_feedback'] = (int)!empty($osRow['notify_email_feedback']);
+        }
+    }
+} catch (Throwable $e) {
+    // keep defaults
+}
+
 $conn->close();
 
-
-$msg = $_GET['msg'] ?? '';
-
+$msg = trim((string)($_GET['msg'] ?? ''));
+$error = trim((string)($_GET['error'] ?? ''));
 
 include __DIR__ . '/../../views/dashboardorganizer.php';
