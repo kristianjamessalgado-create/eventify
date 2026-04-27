@@ -6,7 +6,7 @@ if (!defined('BASE_URL')) {
 
 // Fallbacks ni if ang variables wa na set sa controller or if ang data wa na pasa
 $user_name = $user_name ?? 'Student';
-$user      = $user ?? ['name' => 'Student', 'user_id' => 'N/A', 'department' => null];
+$user      = $user ?? ['name' => 'Student', 'user_id' => 'N/A', 'department' => null, 'student_course' => null, 'student_year_level' => null, 'student_academic_year' => null];
 $events    = $events ?? []; // always an array
 $msg       = $msg ?? '';
 $error     = $error ?? '';
@@ -14,9 +14,11 @@ $department = $user['department'] ?? null;
 $registered_event_ids   = $registered_event_ids ?? [];
 $reg_count_by_event     = $reg_count_by_event ?? [];
 $feedback_submitted_ids = $feedback_submitted_ids ?? [];
+$pending_urgent_feedback_events = $pending_urgent_feedback_events ?? [];
 $student_notifications  = $student_notifications ?? [];
 $unread_notif_count     = isset($unread_notif_count) ? (int) $unread_notif_count : 0;
 $attendance_records = $attendance_records ?? [];
+$attended_event_ids = $attended_event_ids ?? [];
 $openModal = strtolower((string)($_GET['open_modal'] ?? ''));
 $today = date('Y-m-d');
 $upcoming_events = array_values(array_filter($events ?? [], function ($e) use ($today) {
@@ -57,7 +59,7 @@ $upcoming_events = array_values(array_filter($events ?? [], function ($e) use ($
         </div>
     </div>
     <div class="navbar-right">
-        <button class="nav-btn" title="Calendar">
+        <button type="button" class="nav-btn" id="topCalendarShortcutBtn" title="Go to today">
             <i class="fas fa-calendar"></i>
         </button>
         <button
@@ -336,6 +338,60 @@ $upcoming_events = array_values(array_filter($events ?? [], function ($e) use ($
                 >
             </div>
 
+            <div class="form-group">
+                <label for="studentCourseModal">Course / program <span class="text-danger">*</span></label>
+                <select id="studentCourseModal" name="student_course" required>
+                    <?php
+                    $courseOpts = eventify_student_course_program_options();
+                    $storedCourse = trim((string) ($user['student_course'] ?? ''));
+                    $selectedCourse = ($storedCourse !== '' && isset($courseOpts[$storedCourse]) && $storedCourse !== '')
+                        ? $storedCourse
+                        : '';
+                    foreach ($courseOpts as $cv => $clab):
+                        $sel = ((string) $cv === (string) $selectedCourse) ? ' selected' : '';
+                    ?>
+                        <option value="<?= htmlspecialchars((string) $cv) ?>"<?= $sel ?>><?= htmlspecialchars($clab) ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <small class="text-muted">Required — shown on attendance lists. Choose the program that matches your enrollment.</small>
+            </div>
+
+            <div class="form-group">
+                <label for="studentDepartmentModal">Department</label>
+                <?php
+                $deptFromCourse = function_exists('eventify_student_course_program_department')
+                    ? eventify_student_course_program_department((string)($selectedCourse ?? ''))
+                    : '';
+                $displayDepartment = trim((string)($deptFromCourse !== '' ? $deptFromCourse : ($user['department'] ?? '')));
+                ?>
+                <input
+                    type="text"
+                    id="studentDepartmentModal"
+                    value="<?= htmlspecialchars($displayDepartment !== '' ? $displayDepartment : 'Department will be set from selected course') ?>"
+                    readonly
+                >
+                <small class="text-muted">Auto-assigned from your selected course / program.</small>
+            </div>
+
+            <div class="form-group">
+                <label for="studentYearLevelModal">Year level</label>
+                <select id="studentYearLevelModal" name="student_year_level">
+                    <?php foreach (eventify_student_year_level_options() as $yv => $ylab): ?>
+                        <option value="<?= htmlspecialchars($yv) ?>" <?= ((string) ($user['student_year_level'] ?? '') === (string) $yv) ? 'selected' : '' ?>><?= htmlspecialchars($ylab) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="studentAcademicYearModal">School year (AY)</label>
+                <select id="studentAcademicYearModal" name="student_academic_year">
+                    <?php foreach (eventify_student_academic_year_options() as $yv => $ylab): ?>
+                        <option value="<?= htmlspecialchars($yv) ?>" <?= ((string) ($user['student_academic_year'] ?? '') === (string) $yv) ? 'selected' : '' ?>><?= htmlspecialchars($ylab) ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <small class="text-muted">Academic year (e.g. 2025-2026).</small>
+            </div>
+
             <button type="submit" class="btn btn-primary w-100">Save Info</button>
         </form>
     </div>
@@ -345,7 +401,7 @@ $upcoming_events = array_values(array_filter($events ?? [], function ($e) use ($
 <script>
 window.BASE_URL = <?= json_encode(BASE_URL) ?>;
 window.csrfToken = <?= json_encode(function_exists('csrf_token') ? csrf_token() : '') ?>;
-window.studentEvents = <?= json_encode(array_map(function ($e) use ($registered_event_ids, $reg_count_by_event, $feedback_submitted_ids) {
+window.studentEvents = <?= json_encode(array_map(function ($e) use ($registered_event_ids, $reg_count_by_event, $feedback_submitted_ids, $attended_event_ids) {
     $date = trim($e['date'] ?? '');
     $startTime = isset($e['start_time']) ? trim($e['start_time']) : '';
     $endTime = isset($e['end_time']) && $e['end_time'] !== null && $e['end_time'] !== '' ? trim($e['end_time']) : '';
@@ -374,6 +430,7 @@ window.studentEvents = <?= json_encode(array_map(function ($e) use ($registered_
     $regCount = $reg_count_by_event[$eid] ?? 0;
     $isRegistered = in_array($eid, $registered_event_ids, true);
     $hasFeedback = in_array($eid, $feedback_submitted_ids, true);
+    $attended = in_array($eid, $attended_event_ids, true);
 
     return [
         'id'     => $e['id'] ?? null,
@@ -389,10 +446,13 @@ window.studentEvents = <?= json_encode(array_map(function ($e) use ($registered_
             'start_time'          => $e['start_time'] ?? null,
             'end_time'            => $e['end_time'] ?? null,
             'department'          => $e['department'] ?? 'ALL',
+            'department_display'  => eventify_format_department_label((string) ($e['department'] ?? 'ALL')),
             'max_capacity'        => $maxCap,
             'registration_count'  => $regCount,
             'is_registered'       => $isRegistered,
             'has_feedback'        => $hasFeedback,
+            'attended'            => $attended,
+            'status'              => $e['status'] ?? '',
         ],
     ];
 }, $events), JSON_HEX_TAG|JSON_HEX_APOS|JSON_HEX_QUOT|JSON_HEX_AMP); ?>;
@@ -404,6 +464,8 @@ window.currentUser = {
 };
 window.__studentSettings = <?= json_encode($studentSettings ?? []) ?>;
 window.__studentOpenModal = <?= json_encode($openModal) ?>;
+window.__studentCourseDepartmentMap = <?= json_encode(function_exists('eventify_student_course_program_department_map') ? eventify_student_course_program_department_map() : [], JSON_HEX_TAG|JSON_HEX_APOS|JSON_HEX_QUOT|JSON_HEX_AMP) ?>;
+window.__studentPendingUrgentFeedback = <?= json_encode($pending_urgent_feedback_events, JSON_HEX_TAG|JSON_HEX_APOS|JSON_HEX_QUOT|JSON_HEX_AMP) ?>;
 </script>
 
 <!-- FullCalendar JS -->
@@ -614,7 +676,7 @@ window.__studentOpenModal = <?= json_encode($openModal) ?>;
         <ul class="mb-0">
           <li>Use the mini calendar to jump to a date.</li>
           <li>Events shown are filtered by your department.</li>
-          <li>Click Profile to update your info.</li>
+          <li>Click Profile to update your info, course, year level, and school year (shown on event attendance sheets).</li>
         </ul>
       </div>
       <div class="modal-footer">
@@ -688,7 +750,7 @@ window.__studentOpenModal = <?= json_encode($openModal) ?>;
                   <?php endif; ?>
                   <?php if (!empty($event['department'])): ?>
                     <span class="badge bg-light text-dark ms-2">
-                      <?= htmlspecialchars($event['department'] === 'ALL' ? 'All Departments' : $event['department']) ?>
+                      <?= htmlspecialchars(eventify_format_department_label((string) $event['department'])) ?>
                     </span>
                   <?php endif; ?>
                 </div>
@@ -753,7 +815,7 @@ window.__studentOpenModal = <?= json_encode($openModal) ?>;
                   <?php endif; ?>
                   <?php if (!empty($event['department'])): ?>
                     <span class="badge bg-light text-dark ms-2">
-                      <?= htmlspecialchars($event['department'] === 'ALL' ? 'All Departments' : $event['department']) ?>
+                      <?= htmlspecialchars(eventify_format_department_label((string) $event['department'])) ?>
                     </span>
                   <?php endif; ?>
                 </div>
@@ -909,6 +971,25 @@ window.__studentOpenModal = <?= json_encode($openModal) ?>;
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Urgent post-event feedback prompt -->
+<div class="modal fade" id="studentUrgentFeedbackModal" tabindex="-1" aria-labelledby="studentUrgentFeedbackModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-warning" style="border-width: 2px;">
+      <div class="modal-header text-bg-warning">
+        <h5 class="modal-title" id="studentUrgentFeedbackModalLabel"><i class="fas fa-bullhorn me-2"></i>Feedback needed</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="studentUrgentFeedbackModalBody">
+        <p class="mb-0 text-muted">Loading…</p>
+      </div>
+      <div class="modal-footer flex-wrap gap-2">
+        <button type="button" class="btn btn-outline-secondary" id="studentUrgentFeedbackSnoozeBtn">Remind me in 4 hours</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
       </div>
     </div>
   </div>

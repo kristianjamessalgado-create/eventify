@@ -4,6 +4,7 @@ include __DIR__ . '/../../config/db.php';
 include __DIR__ . '/../../config/config.php';
 include __DIR__ . '/../../config/csrf.php';
 include __DIR__ . '/../../config/departments.php';
+require_once __DIR__ . '/../../config/organizer_departments.php';
 
 // Check if user is logged in as organizer
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'organizer') {
@@ -14,6 +15,8 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'organizer') {
 $session_user_id = $_SESSION['user_id'];
 $error = '';
 $success = '';
+
+eventify_events_department_ensure_varchar($conn);
 
 $eventsHasGeo = false;
 try {
@@ -47,7 +50,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $start_time = $_POST['start_time'] ?? '';
     $end_time = $_POST['end_time'] ?? '';
     $location = trim($_POST['location'] ?? '');
-    $department = $_POST['department'] ?? 'ALL';
     $max_capacity_raw = trim($_POST['max_capacity'] ?? '');
     $maxCapVal = null;
     if ($max_capacity_raw !== '' && ctype_digit($max_capacity_raw)) {
@@ -103,7 +105,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             if (!$error) {
-                $department = eventify_normalize_department($department);
+                $parsedDept = eventify_parse_event_departments_from_request($_POST);
+                if (!$parsedDept['ok']) {
+                    $error = $parsedDept['error'] ?? 'Invalid department selection.';
+                } else {
+                    $department = $parsedDept['department'];
+                }
+            }
+
+            if (!$error) {
 
                 $latVal = null;
                 $lngVal = null;
@@ -232,6 +242,14 @@ $stmt->bind_result($db_name);
 $stmt->fetch();
 $user_name = $db_name ?? 'Organizer';
 $stmt->close();
+
+$organizer_department_choices = eventify_organizer_department_choices();
+$pageDeptCheckboxState = eventify_organizer_department_form_checkbox_state(
+    isset($_POST['department'])
+        ? (is_array($_POST['department']) ? $_POST['department'] : [$_POST['department']])
+        : null,
+    'ALL'
+);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -307,6 +325,9 @@ $stmt->close();
         
         .create-event-body {
             padding: 40px;
+            max-height: min(88vh, 900px);
+            overflow-y: auto;
+            overscroll-behavior: contain;
         }
         
         .form-group {
@@ -594,7 +615,7 @@ $stmt->close();
                             value="<?= htmlspecialchars($_POST['end_time'] ?? '') ?>"
                         >
                     </div>
-                    <small class="text-muted d-block mt-1">Optional — leave blank if the event has no fixed end time.</small>
+                    <small class="text-muted d-block mt-1">Optional — leave blank if the event has no fixed end. Active events then auto-complete after that calendar day; on the event date you can <strong>Mark as ended</strong> from the dashboard.</small>
                 </div>
                 
                 <div class="form-group">
@@ -649,20 +670,27 @@ $stmt->close();
                 </div>
                 
                 <div class="form-group">
-                    <label for="department">
+                    <span class="d-block mb-2" style="color: #3c4043; font-weight: 500; font-size: 14px;">
                         Department / Audience <span class="required">*</span>
-                    </label>
-                    <select id="department" name="department" class="form-control" required>
-                        <?php $selectedDept = $_POST['department'] ?? 'ALL'; ?>
-                        <option value="ALL" <?= $selectedDept === 'ALL' ? 'selected' : '' ?>>All Departments</option>
-                        <option value="High school department" <?= $selectedDept === 'High school department' ? 'selected' : '' ?>>High School Department</option>
-                        <option value="College of Communication, Information and Technology" <?= $selectedDept === 'College of Communication, Information and Technology' ? 'selected' : '' ?>>College of Communication, Information and Technology</option>
-                        <option value="College of Accountancy and Business" <?= $selectedDept === 'College of Accountancy and Business' ? 'selected' : '' ?>>College of Accountancy and Business</option>
-                        <option value="School of Law and Political Science" <?= $selectedDept === 'School of Law and Political Science' ? 'selected' : '' ?>>School of Law and Political Science</option>
-                        <option value="College of Education" <?= $selectedDept === 'College of Education' ? 'selected' : '' ?>>College of Education</option>
-                        <option value="College of Nursing and Allied health sciences" <?= $selectedDept === 'College of Nursing and Allied health sciences' ? 'selected' : '' ?>>College of Nursing and Allied health sciences</option>
-                        <option value="College of Hospitality Management" <?= $selectedDept === 'College of Hospitality Management' ? 'selected' : '' ?>>College of Hospitality Management</option>
-                    </select>
+                    </span>
+                    <p class="text-muted small mb-2" style="font-size: 13px;">Choose <strong>All departments</strong> or one or more specific audiences.</p>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" name="department[]" value="ALL" id="standaloneDeptAll" <?= !empty($pageDeptCheckboxState['all']) ? 'checked' : '' ?>>
+                        <label class="form-check-label fw-semibold" for="standaloneDeptAll">All departments</label>
+                    </div>
+                    <div class="border rounded p-2" style="max-height: 220px; overflow-y: auto; background: #fafafa;">
+                        <?php foreach ($organizer_department_choices as $deptVal => $deptLabel): ?>
+                            <?php if ($deptVal === 'ALL') {
+                                continue;
+                            } ?>
+                            <?php $sdCbId = 'standalone_dept_' . substr(md5($deptVal), 0, 14); ?>
+                            <?php $sdChecked = !$pageDeptCheckboxState['all'] && in_array($deptVal, $pageDeptCheckboxState['specific'], true); ?>
+                            <div class="form-check">
+                                <input class="form-check-input standalone-dept-specific" type="checkbox" name="department[]" value="<?= htmlspecialchars($deptVal) ?>" id="<?= htmlspecialchars($sdCbId) ?>" <?= $sdChecked ? 'checked' : '' ?>>
+                                <label class="form-check-label" for="<?= htmlspecialchars($sdCbId) ?>"><?= htmlspecialchars($deptLabel) ?></label>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
                 </div>
                 
                 <div class="btn-group">
@@ -711,6 +739,23 @@ $stmt->close();
         var EVENTIFY_GEOCODE_URL = <?= json_encode(BASE_URL . '/backend/auth/geocode_proxy.php') ?>;
 
         document.addEventListener('DOMContentLoaded', function () {
+            var cform = document.getElementById('createEventForm');
+            if (cform) {
+                var allD = document.getElementById('standaloneDeptAll');
+                var specsD = cform.querySelectorAll('.standalone-dept-specific');
+                if (allD) {
+                    allD.addEventListener('change', function () {
+                        if (allD.checked) {
+                            specsD.forEach(function (cb) { cb.checked = false; });
+                        }
+                    });
+                }
+                specsD.forEach(function (cb) {
+                    cb.addEventListener('change', function () {
+                        if (cb.checked && allD) allD.checked = false;
+                    });
+                });
+            }
             if (typeof window.initEventLocationPicker === 'function' && window.L) {
                 window.initEventLocationPicker({
                     mapElId: 'eventLocationMap',
@@ -732,6 +777,15 @@ $stmt->close();
             const date = document.getElementById('date').value;
             const startTime = (document.getElementById('start_time') || {}).value;
             const location = document.getElementById('location').value.trim();
+            const allD = document.getElementById('standaloneDeptAll');
+            const specsD = form.querySelectorAll('.standalone-dept-specific');
+            const anyD = Array.from(specsD).some(function (c) { return c.checked; });
+            const allOn = allD && allD.checked;
+            if (!allOn && !anyD) {
+                e.preventDefault();
+                showMessageModal('Please choose "All departments" or select at least one department.');
+                return false;
+            }
             const requireGeo = form.getAttribute('data-require-geo') === '1';
             const latEl = document.getElementById('event_latitude');
             const lngEl = document.getElementById('event_longitude');

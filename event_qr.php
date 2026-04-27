@@ -55,13 +55,63 @@ $conn->close();
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        body { padding: 2rem; background: #f8f9fa; }
-        .qr-card { max-width: 420px; margin: 0 auto; border-radius: 16px; box-shadow: 0 10px 40px rgba(0,0,0,0.08); overflow: hidden; }
-        .qr-header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; padding: 1.25rem; text-align: center; }
+        :root {
+            --school-green-900: #064e3b;
+            --school-green-800: #065f46;
+            --school-green-700: #047857;
+            --school-gold-500: #eab308;
+            --school-gold-600: #ca8a04;
+            --school-bg: #f0f9f4;
+            --school-border: #cfe7d8;
+        }
+        body {
+            padding: 2rem;
+            background:
+                radial-gradient(900px 360px at 0% -10%, rgba(6, 95, 70, 0.18), transparent 60%),
+                radial-gradient(700px 320px at 100% -5%, rgba(234, 179, 8, 0.14), transparent 60%),
+                var(--school-bg);
+        }
+        .qr-card {
+            max-width: 420px;
+            margin: 0 auto;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(6, 78, 59, 0.16);
+            overflow: hidden;
+            border: 1px solid var(--school-border);
+        }
+        .qr-header {
+            background: linear-gradient(120deg, var(--school-green-900) 0%, var(--school-green-700) 72%, var(--school-gold-600) 100%);
+            color: #fff;
+            padding: 1.25rem;
+            text-align: center;
+        }
         .qr-body { padding: 1.5rem; background: #fff; }
-        .qr-body img { display: block; margin: 0 auto 1rem; border: 4px solid #eee; border-radius: 12px; }
-        .checkin-url { font-size: 0.8rem; word-break: break-all; color: #6c757d; }
-        .event-meta { color: #6c757d; font-size: 0.9rem; }
+        .qr-body img {
+            display: block;
+            margin: 0 auto 1rem;
+            border: 4px solid #dcfce7;
+            border-radius: 12px;
+            box-shadow: 0 4px 14px rgba(15, 23, 42, 0.12);
+        }
+        .checkin-url {
+            font-size: 0.8rem;
+            word-break: break-all;
+            color: #475569;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 0.5rem 0.6rem;
+        }
+        .event-meta { color: #334155; font-size: 0.9rem; }
+        .btn-back {
+            border-color: #ca8a04;
+            color: #854d0e;
+        }
+        .btn-back:hover {
+            background: #fef3c7;
+            border-color: #ca8a04;
+            color: #713f12;
+        }
     </style>
 </head>
 <body>
@@ -90,7 +140,7 @@ $conn->close();
                 if ($role === 'admin') $back_url = BASE_URL . '/backend/admin/dashboard.php';
                 if ($role === 'super_admin') $back_url = BASE_URL . '/backend/super_admin/dashboardsuperadmin.php';
                 ?>
-                <a href="<?= $back_url ?>" class="btn btn-outline-secondary btn-sm">Back to dashboard</a>
+                <a href="<?= $back_url ?>" class="btn btn-outline-secondary btn-sm btn-back">Back to dashboard</a>
             </div>
         </div>
     </div>

@@ -4,6 +4,7 @@ include __DIR__ . '/../../config/db.php';
 include __DIR__ . '/../../config/config.php';
 include __DIR__ . '/../../config/csrf.php';
 include __DIR__ . '/../../config/departments.php';
+require_once __DIR__ . '/../../config/organizer_departments.php';
 
 // Require organizer login
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'organizer') {
@@ -42,9 +43,22 @@ if (!$event) {
     exit();
 }
 
+eventify_events_department_ensure_varchar($conn);
+
 if (!array_key_exists('max_capacity', $event)) {
     $event['max_capacity'] = null;
 }
+
+$eventDepartmentStored = (string) ($event['department'] ?? 'ALL');
+
+$organizer_department_choices = eventify_organizer_department_choices();
+$deptFormPost = ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['department']))
+    ? (is_array($_POST['department']) ? $_POST['department'] : [$_POST['department']])
+    : null;
+$deptCheckboxState = eventify_organizer_department_form_checkbox_state(
+    $deptFormPost,
+    $eventDepartmentStored
+);
 
 // Handle form submission (update)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -56,7 +70,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $description = trim($_POST['description'] ?? '');
     $date        = $_POST['date'] ?? '';
     $location    = trim($_POST['location'] ?? '');
-    $department  = $_POST['department'] ?? 'ALL';
     $max_capacity_raw = trim($_POST['max_capacity'] ?? '');
     $maxCapVal = null;
     if ($max_capacity_raw !== '' && ctype_digit($max_capacity_raw)) {
@@ -91,35 +104,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($eventDate < $today) {
                 $error = "Event date cannot be in the past.";
             } else {
-                // Validate department value from centralized config
-                $department = eventify_normalize_department($department);
-
-                $stmt = $conn->prepare("UPDATE events SET title = ?, description = ?, date = ?, location = ?, department = ?, max_capacity = ? WHERE id = ? AND organizer_id = ?");
-                if (!$stmt) {
-                    $stmt = $conn->prepare("UPDATE events SET title = ?, description = ?, date = ?, location = ?, department = ? WHERE id = ? AND organizer_id = ?");
-                    $stmt->bind_param("sssssii", $title, $description, $date, $location, $department, $event_id, $session_user_id);
+                $parsedDept = eventify_parse_event_departments_from_request($_POST);
+                if (!$parsedDept['ok']) {
+                    $error = $parsedDept['error'] ?? 'Invalid department selection.';
                 } else {
-                    $stmt->bind_param("sssssiii", $title, $description, $date, $location, $department, $maxCapVal, $event_id, $session_user_id);
+                    $department = $parsedDept['department'];
                 }
 
-                if ($stmt->execute()) {
-                    $stmt->close();
-                    require_once __DIR__ . '/../lib/activity_logger.php';
-                    log_activity(
-                        $conn,
-                        (int) $session_user_id,
-                        'organizer',
-                        'event_updated',
-                        'event',
-                        $event_id,
-                        'Updated event: ' . $title
-                    );
-                    $success = "Event updated successfully!";
-                    header("Location: " . BASE_URL . "/backend/auth/dashboardorganizer.php?msg=" . urlencode($success));
-                    exit();
-                } else {
-                    $error = "Failed to update event. Please try again.";
-                    $stmt->close();
+                if (!$error) {
+                    $stmt = $conn->prepare("UPDATE events SET title = ?, description = ?, date = ?, location = ?, department = ?, max_capacity = ? WHERE id = ? AND organizer_id = ?");
+                    if (!$stmt) {
+                        $stmt = $conn->prepare("UPDATE events SET title = ?, description = ?, date = ?, location = ?, department = ? WHERE id = ? AND organizer_id = ?");
+                        $stmt->bind_param("sssssii", $title, $description, $date, $location, $department, $event_id, $session_user_id);
+                    } else {
+                        $stmt->bind_param("sssssiii", $title, $description, $date, $location, $department, $maxCapVal, $event_id, $session_user_id);
+                    }
+
+                    if ($stmt->execute()) {
+                        $stmt->close();
+                        require_once __DIR__ . '/../lib/activity_logger.php';
+                        log_activity(
+                            $conn,
+                            (int) $session_user_id,
+                            'organizer',
+                            'event_updated',
+                            'event',
+                            $event_id,
+                            'Updated event: ' . $title
+                        );
+                        $success = "Event updated successfully!";
+                        header("Location: " . BASE_URL . "/backend/auth/dashboardorganizer.php?msg=" . urlencode($success));
+                        exit();
+                    } else {
+                        $error = "Failed to update event. Please try again.";
+                        $stmt->close();
+                    }
                 }
             }
         }
@@ -130,8 +149,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $event['description'] = $description;
     $event['date']        = $date;
     $event['location']    = $location;
-    $event['department']  = $department;
     $event['max_capacity'] = $maxCapVal;
+    $deptPostErr = isset($_POST['department'])
+        ? (is_array($_POST['department']) ? $_POST['department'] : [$_POST['department']])
+        : null;
+    $deptCheckboxState = eventify_organizer_department_form_checkbox_state(
+        $deptPostErr,
+        $eventDepartmentStored
+    );
 }
 
 // Fetch organizer name for display
@@ -494,20 +519,27 @@ $stmt->close();
                 </div>
 
                 <div class="form-group">
-                    <label for="department">
+                    <span class="d-block mb-2">
                         Department / Audience <span class="required">*</span>
-                    </label>
-                    <?php $selectedDept = $event['department'] ?? 'ALL'; ?>
-                    <select id="department" name="department" class="form-control" required>
-                        <option value="ALL" <?= $selectedDept === 'ALL' ? 'selected' : '' ?>>All Departments</option>
-                        <option value="High school department" <?= $selectedDept === 'High school department' ? 'selected' : '' ?>>High School Department</option>
-                        <option value="College of Communication, Information and Technology" <?= $selectedDept === 'College of Communication, Information and Technology' ? 'selected' : '' ?>>College of Communication, Information and Technology</option>
-                        <option value="College of Accountancy and Business" <?= $selectedDept === 'College of Accountancy and Business' ? 'selected' : '' ?>>College of Accountancy and Business</option>
-                        <option value="School of Law and Political Science" <?= $selectedDept === 'School of Law and Political Science' ? 'selected' : '' ?>>School of Law and Political Science</option>
-                        <option value="College of Education" <?= $selectedDept === 'College of Education' ? 'selected' : '' ?>>College of Education</option>
-                        <option value="College of Nursing and Allied health sciences" <?= $selectedDept === 'College of Nursing and Allied health sciences' ? 'selected' : '' ?>>College of Nursing and Allied health sciences</option>
-                        <option value="College of Hospitality Management" <?= $selectedDept === 'College of Hospitality Management' ? 'selected' : '' ?>>College of Hospitality Management</option>
-                    </select>
+                    </span>
+                    <p class="text-muted small mb-2" style="font-size: 13px;">Choose <strong>All departments</strong> or one or more specific audiences.</p>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" name="department[]" value="ALL" id="editDeptAll" <?= !empty($deptCheckboxState['all']) ? 'checked' : '' ?>>
+                        <label class="form-check-label fw-semibold" for="editDeptAll">All departments</label>
+                    </div>
+                    <div class="border rounded p-2" style="max-height: 220px; overflow-y: auto; background: #fafafa;">
+                        <?php foreach ($organizer_department_choices as $deptVal => $deptLabel): ?>
+                            <?php if ($deptVal === 'ALL') {
+                                continue;
+                            } ?>
+                            <?php $edCbId = 'edit_dept_' . substr(md5($deptVal), 0, 14); ?>
+                            <?php $isChecked = !$deptCheckboxState['all'] && in_array($deptVal, $deptCheckboxState['specific'], true); ?>
+                            <div class="form-check">
+                                <input class="form-check-input edit-dept-specific" type="checkbox" name="department[]" value="<?= htmlspecialchars($deptVal) ?>" id="<?= htmlspecialchars($edCbId) ?>" <?= $isChecked ? 'checked' : '' ?>>
+                                <label class="form-check-label" for="<?= htmlspecialchars($edCbId) ?>"><?= htmlspecialchars($deptLabel) ?></label>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
                 </div>
 
                 <div class="btn-group">
@@ -550,10 +582,39 @@ $stmt->close();
             var modal = new bootstrap.Modal(document.getElementById('messageModal'));
             modal.show();
         }
+        (function () {
+            var form = document.getElementById('editEventForm');
+            if (!form) return;
+            var allCb = document.getElementById('editDeptAll');
+            var specifics = form.querySelectorAll('.edit-dept-specific');
+            if (allCb) {
+                allCb.addEventListener('change', function () {
+                    if (allCb.checked) {
+                        specifics.forEach(function (cb) { cb.checked = false; });
+                    }
+                });
+            }
+            specifics.forEach(function (cb) {
+                cb.addEventListener('change', function () {
+                    if (cb.checked && allCb) allCb.checked = false;
+                });
+            });
+        })();
+
         document.getElementById('editEventForm').addEventListener('submit', function(e) {
             const title = document.getElementById('title').value.trim();
             const date  = document.getElementById('date').value;
             const loc   = document.getElementById('location').value.trim();
+            const form  = document.getElementById('editEventForm');
+            const allCb = document.getElementById('editDeptAll');
+            const specifics = form ? form.querySelectorAll('.edit-dept-specific') : [];
+            const anySpec = Array.from(specifics).some(function (c) { return c.checked; });
+            const allOn = allCb && allCb.checked;
+            if (!allOn && !anySpec) {
+                e.preventDefault();
+                showMessageModal('Please choose "All departments" or select at least one department.');
+                return false;
+            }
 
             if (!title) {
                 e.preventDefault();

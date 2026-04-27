@@ -4,6 +4,7 @@ include __DIR__ . '/../../config/db.php';
 include __DIR__ . '/../../config/config.php';
 include __DIR__ . '/../../config/csrf.php';
 require_once __DIR__ . '/../../config/organizer_departments.php';
+require_once __DIR__ . '/../../config/departments.php';
 require_once __DIR__ . '/../lib/event_status_auto.php';
 require_once __DIR__ . '/../lib/staff_messaging.php';
 
@@ -150,6 +151,33 @@ try {
     }
 } catch (Throwable $e) {
     $feedbackStats = ['total_feedback' => 0, 'avg_rating' => 0.0, 'five_star' => 0];
+}
+
+// Recent anonymous comments (no student names) on this organizer's events
+$feedback_comments_anon = [];
+try {
+    $cStmt = $conn->prepare("
+        SELECT ef.rating, ef.comment, ef.created_at, e.title AS event_title
+        FROM event_feedback ef
+        JOIN events e ON e.id = ef.event_id
+        WHERE e.organizer_id = ?
+          AND ef.comment IS NOT NULL
+          AND TRIM(ef.comment) <> ''
+        ORDER BY ef.created_at DESC
+        LIMIT 35
+    ");
+    if ($cStmt) {
+        $cStmt->bind_param('i', $session_user_id);
+        if ($cStmt->execute()) {
+            $cr = $cStmt->get_result();
+            if ($cr) {
+                $feedback_comments_anon = $cr->fetch_all(MYSQLI_ASSOC);
+            }
+        }
+        $cStmt->close();
+    }
+} catch (Throwable $e) {
+    $feedback_comments_anon = [];
 }
 
 // Fetch unread notifications for organizer (approve/reject etc.)

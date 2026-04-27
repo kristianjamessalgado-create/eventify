@@ -4,6 +4,9 @@ session_start();
 // Include DB and config
 include __DIR__ . '/config/db.php';
 include __DIR__ . '/config/config.php';
+include __DIR__ . '/config/departments.php';
+
+eventify_events_department_ensure_varchar($conn);
 
 // Allow logged-in users (student / multimedia / organizer) to view upcoming events
 $role = $_SESSION['role'] ?? '';
@@ -59,13 +62,13 @@ switch ($role) {
 // Get today's date (for filtering upcoming events only)
 $today = date('Y-m-d');
 
-// Fetch upcoming events filtered by user's department (if set)
+// Fetch upcoming events filtered by user's department (if set); supports multi-audience JSON
+$deptSql = eventify_department_match_sql('department');
 if ($department) {
-    $stmt2 = $conn->prepare("SELECT * FROM events WHERE status = 'active' AND date >= ? AND (department = ? OR department = 'ALL') ORDER BY date ASC");
-    $stmt2->bind_param("ss", $today, $department);
+    $stmt2 = $conn->prepare("SELECT * FROM events WHERE status IN ('active','completed','closed') AND date >= ? AND {$deptSql} ORDER BY date ASC");
+    $stmt2->bind_param("sss", $today, $department, $department);
 } else {
-    // Fallback: if no department set, show all active upcoming events
-    $stmt2 = $conn->prepare("SELECT * FROM events WHERE status = 'active' AND date >= ? ORDER BY date ASC");
+    $stmt2 = $conn->prepare("SELECT * FROM events WHERE status IN ('active','completed','closed') AND date >= ? ORDER BY date ASC");
     $stmt2->bind_param("s", $today);
 }
 
@@ -307,6 +310,25 @@ $conn->close();
             font-size: 0.78rem;
             font-weight: 700;
         }
+
+        .event-status-ended {
+            display: inline-block;
+            margin-right: 0.5rem;
+            padding: 0.35rem 0.75rem;
+            background: rgba(100, 116, 139, 0.2);
+            color: #475569;
+            border: 1px solid rgba(100, 116, 139, 0.45);
+            border-radius: 8px;
+            font-size: 0.72rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .event-card.is-ended {
+            opacity: 0.92;
+            border-color: rgba(100, 116, 139, 0.35);
+        }
         
         .empty-state {
             text-align: center;
@@ -384,7 +406,11 @@ $conn->close();
             <p class="section-label">Events (<?= count($events) ?>)</p>
             <div class="events-grid">
                 <?php foreach ($events as $event): ?>
-                    <div class="event-card">
+                    <?php
+                        $evStatus = strtolower((string)($event['status'] ?? ''));
+                        $isEndedListing = ($evStatus === 'closed' || $evStatus === 'completed');
+                    ?>
+                    <div class="event-card<?= $isEndedListing ? ' is-ended' : '' ?>">
                         <div class="event-card-top">
                             <div class="event-date-badge">
                                 <span class="event-month"><?= date('M', strtotime($event['date'])) ?></span>
@@ -401,11 +427,16 @@ $conn->close();
                         <?php if (!empty($event['description'])): ?>
                             <p class="event-desc"><?= htmlspecialchars($event['description']) ?></p>
                         <?php endif; ?>
-                        <?php if ($event['department'] !== 'ALL'): ?>
-                            <span class="event-dept"><?= htmlspecialchars($event['department']) ?></span>
-                        <?php else: ?>
-                            <span class="event-dept">All Departments</span>
-                        <?php endif; ?>
+                        <div class="d-flex flex-wrap align-items-center gap-2">
+                            <?php if ($isEndedListing): ?>
+                                <span class="event-status-ended">Ended</span>
+                            <?php endif; ?>
+                            <?php if ($event['department'] !== 'ALL'): ?>
+                                <span class="event-dept"><?= htmlspecialchars($event['department']) ?></span>
+                            <?php else: ?>
+                                <span class="event-dept">All Departments</span>
+                            <?php endif; ?>
+                        </div>
                     </div>
                 <?php endforeach; ?>
             </div>

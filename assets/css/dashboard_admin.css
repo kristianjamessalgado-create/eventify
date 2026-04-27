@@ -48,6 +48,16 @@
 .adm-actions { display: flex; flex-wrap: wrap; gap: 0.35rem; }
 .adm-btn-approve { background: #10b981; color: #fff; border: none; padding: 0.35rem 0.7rem; border-radius: 8px; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
 .adm-btn-reject { background: #fee2e2; color: #b91c1c; border: none; padding: 0.35rem 0.7rem; border-radius: 8px; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
+/* Keep quick-action links readable on dark sidebar (fixes "Messages" link color). */
+.sidebar .quick-actions a.action-btn,
+.sidebar .quick-actions a.action-btn:link,
+.sidebar .quick-actions a.action-btn:visited {
+    color: #f8fafc !important;
+}
+.sidebar .quick-actions a.action-btn:hover,
+.sidebar .quick-actions a.action-btn:focus {
+    color: #fef08a !important;
+}
 #auditLogModal .modal-body { max-height: min(70vh, 520px); overflow-y: auto; }
 #auditLogModal .table { font-size: 0.8rem; }
 #auditLogModal .table thead th { position: sticky; top: 0; background: #f8fafc; z-index: 1; }
@@ -56,6 +66,20 @@
 .adm-chart-card h6 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 0.75rem; }
 .adm-chart-wrap { position: relative; height: 220px; }
 .adm-chart-empty { display: flex; align-items: center; justify-content: center; height: 100%; color: #64748b; font-size: 0.85rem; text-align: center; }
+.sidebar-toggle-mobile {
+    display: inline-flex;
+}
+/* Admin navbar is in normal flow, so remove inherited 64px top offset from student CSS. */
+.dashboard-layout {
+    margin-top: 0;
+}
+/* Remove inherited top inset in sidebar so it sits flush under admin navbar. */
+.sidebar {
+    padding-top: 0;
+}
+.sidebar-close-mobile {
+    display: none;
+}
 /* Admin uses cards + charts + calendar on one page; allow vertical scroll instead of clipping calendar rows. */
 .main-content { overflow-y: auto; overflow-x: hidden; }
 .main-content .calendar-container { flex: 0 0 auto; min-height: 760px; }
@@ -71,6 +95,95 @@
     gap: 0.9rem;
     font-size: 0.8rem;
     color: #334155;
+}
+
+@media (min-width: 769px) {
+    #adminSidebar {
+        transition: width 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+                    padding-left 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+                    padding-right 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+                    opacity 0.22s ease,
+                    border-color 0.22s ease,
+                    box-shadow 0.22s ease;
+    }
+
+    body.admin-sidebar-collapsed #adminSidebar {
+        width: 0 !important;
+        min-width: 0 !important;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+        border-right-color: transparent !important;
+        box-shadow: none !important;
+        opacity: 0;
+        overflow: hidden;
+        pointer-events: none;
+    }
+
+    #adminSidebar.is-collapsed {
+        width: 0 !important;
+        min-width: 0 !important;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+        border-right-color: transparent !important;
+        box-shadow: none !important;
+        opacity: 0;
+        overflow: hidden;
+        pointer-events: none;
+    }
+
+    body.admin-sidebar-collapsed .main-content {
+        border-left: 0 !important;
+    }
+}
+
+@media (max-width: 768px) {
+    .sidebar-backdrop {
+        position: fixed;
+        inset: 64px 0 0 0;
+        background: rgba(2, 6, 23, 0.45);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.22s ease;
+        z-index: 990;
+    }
+
+    #adminSidebar {
+        position: fixed !important;
+        top: 64px !important;
+        left: 0 !important;
+        bottom: 0 !important;
+        transform: translateX(-100%);
+        width: min(88vw, 320px) !important;
+        max-width: 320px !important;
+        height: auto !important;
+        z-index: 1001 !important;
+        transition: transform 0.22s ease;
+        padding-top: 52px !important;
+    }
+
+    body.admin-sidebar-open #adminSidebar {
+        transform: translateX(0);
+    }
+
+    body.admin-sidebar-open .sidebar-backdrop {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    .sidebar-close-mobile {
+        display: inline-flex !important;
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        width: 34px;
+        height: 34px;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        border-radius: 8px;
+        background: rgba(2, 6, 23, 0.25);
+        color: #f8fafc;
+    }
 }
 
 #adminSettingsModal .modal-body {

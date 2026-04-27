@@ -6,14 +6,61 @@ let renderMiniCalendar = null; // Will be set by initMiniCalendar
 // Initialize on DOM ready
 document.addEventListener('DOMContentLoaded', function() {
     initStudentSettings();
+    initStudentCourseDepartmentDisplay();
     initMiniCalendar();
     initFullCalendar();
     initViewButtons();
+    initTopCalendarShortcut();
     initCalendarNavigation();
     initMobileSidebar();
     initScanQRModal();
     initStudentUpcomingEventClicks();
+    initUrgentFeedbackPrompt();
 });
+
+function jumpStudentCalendarToToday(options) {
+    if (!calendar) return;
+    var opts = options || {};
+    calendar.today();
+    const focus = calendar.getDate ? calendar.getDate() : new Date();
+    currentDate = new Date(focus);
+    selectedDate = new Date(focus);
+    if (renderMiniCalendar) renderMiniCalendar();
+
+    if (opts.syncActiveButton) {
+        const viewButtons = document.querySelectorAll('.view-btn');
+        viewButtons.forEach(function (btn) {
+            btn.classList.toggle('active', btn.getAttribute('data-view') === 'today');
+        });
+    }
+}
+
+function initTopCalendarShortcut() {
+    const topCalendarBtn = document.getElementById('topCalendarShortcutBtn');
+    const controlsEl = document.querySelector('.calendar-controls');
+    if (!topCalendarBtn) return;
+
+    topCalendarBtn.addEventListener('click', function () {
+        jumpStudentCalendarToToday({ syncActiveButton: true });
+        if (controlsEl && typeof controlsEl.scrollIntoView === 'function') {
+            controlsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    });
+}
+
+function initStudentCourseDepartmentDisplay() {
+    var courseEl = document.getElementById('studentCourseModal');
+    var deptEl = document.getElementById('studentDepartmentModal');
+    if (!courseEl || !deptEl) return;
+    var map = window.__studentCourseDepartmentMap || {};
+    var syncDept = function () {
+        var course = String(courseEl.value || '');
+        var dept = String(map[course] || '').trim();
+        deptEl.value = dept || 'Department will be set from selected course';
+    };
+    courseEl.addEventListener('change', syncDept);
+    syncDept();
+}
 
 function initStudentSettings() {
     var form = document.getElementById('studentSettingsForm');
@@ -196,6 +243,20 @@ function initMobileSidebar() {
     const closeBtn = document.getElementById('sidebarCloseMobile');
     const backdrop = document.getElementById('sidebarBackdrop');
     const sidebar = document.getElementById('studentSidebar');
+    const isMobileView = () => window.matchMedia('(max-width: 768px)').matches;
+    const refreshCalendarLayout = () => {
+        if (!calendar) return;
+        if (typeof calendar.updateSize === 'function') {
+            calendar.updateSize();
+        }
+    };
+    const refreshCalendarLayoutSmooth = () => {
+        if (!calendar) return;
+        // Recompute during and after transition so grid stays fluid.
+        [0, 90, 180, 280, 360].forEach(function (ms) {
+            setTimeout(refreshCalendarLayout, ms);
+        });
+    };
 
     function openSidebar() {
         document.body.classList.add('student-sidebar-open');
@@ -205,19 +266,42 @@ function initMobileSidebar() {
         document.body.classList.remove('student-sidebar-open');
     }
 
-    if (toggle) toggle.addEventListener('click', openSidebar);
+    if (toggle) {
+        toggle.addEventListener('click', function () {
+            if (isMobileView()) {
+                openSidebar();
+                return;
+            }
+            // Desktop: use the same icon to collapse/expand sidebar.
+            document.body.classList.toggle('student-sidebar-collapsed');
+            refreshCalendarLayoutSmooth();
+        });
+    }
     if (closeBtn) closeBtn.addEventListener('click', closeSidebar);
     if (backdrop) backdrop.addEventListener('click', closeSidebar);
 
     // Close drawer when a quick action or modal trigger is clicked
     if (sidebar) {
+        sidebar.addEventListener('transitionend', function (e) {
+            if (e.propertyName === 'width' || e.propertyName === 'padding-left' || e.propertyName === 'padding-right') {
+                refreshCalendarLayout();
+            }
+        });
         sidebar.addEventListener('click', function(e) {
             var target = e.target.closest('.action-btn, .logout-btn, [data-bs-toggle="modal"]');
-            if (target && window.matchMedia('(max-width: 768px)').matches) {
+            if (target && isMobileView()) {
                 closeSidebar();
             }
         });
     }
+
+    window.addEventListener('resize', function () {
+        if (!isMobileView()) {
+            // Ensure mobile drawer state does not leak to desktop.
+            closeSidebar();
+        }
+        refreshCalendarLayoutSmooth();
+    });
 }
 
 // ===============================
@@ -425,14 +509,25 @@ function initFullCalendar() {
     if (renderMiniCalendar) renderMiniCalendar();
 }
 
+function studentFormatDeptLabel(stored) {
+    const d = String(stored || 'ALL').trim();
+    if (d === '' || d === 'ALL') return 'All Departments';
+    if (d.charAt(0) === '[') {
+        try {
+            const arr = JSON.parse(d);
+            if (Array.isArray(arr) && arr.length) return arr.join(' · ');
+        } catch (e) { /* ignore */ }
+    }
+    return d;
+}
+
 // ===============================
 // STUDENT EVENT DETAILS (SHARED)
 // ===============================
 function showStudentEventDetails(eventLike) {
     if (!eventLike) return;
     const props = eventLike.extendedProps || {};
-    const dept = (props.department || 'ALL');
-    const deptText = (dept === 'ALL') ? 'All Departments' : dept;
+    const deptText = String(props.department_display || '').trim() || studentFormatDeptLabel(props.department);
     let startDate = null;
     let endDate = null;
 
@@ -470,11 +565,15 @@ function showStudentEventDetails(eventLike) {
     const eventYmd = props.event_date_ymd || '';
     const todayY = todayYmdLocal();
     const isPast = eventYmd !== '' && eventYmd < todayY;
+    const statusLower = String(props.status || '').toLowerCase();
+    const endedByOrganizer = statusLower === 'closed' || statusLower === 'completed';
+    const isEndedForFeedback = isPast || endedByOrganizer;
 
     const maxCap = props.max_capacity != null && props.max_capacity !== '' ? parseInt(props.max_capacity, 10) : null;
     const regCount = parseInt(props.registration_count, 10) || 0;
     const isRegistered = !!props.is_registered;
     const hasFeedback = !!props.has_feedback;
+    const attended = !!props.attended;
     const eventId = props.event_id || eventLike.id;
     const csrf = window.csrfToken || '';
     const base = (window.BASE_URL || '').replace(/\/$/, '');
@@ -489,7 +588,7 @@ function showStudentEventDetails(eventLike) {
     let actionHtml = '';
     const isFull = maxCap != null && !isNaN(maxCap) && maxCap > 0 && regCount >= maxCap;
 
-    if (!isPast) {
+    if (!isEndedForFeedback) {
         if (isRegistered) {
             actionHtml = '<p class="mb-2 text-success small"><i class="fas fa-check-circle me-1"></i>You are registered for this event.</p>';
             if (eventId && csrf) {
@@ -510,10 +609,11 @@ function showStudentEventDetails(eventLike) {
         } else {
             actionHtml = '<p class="mb-0 small text-muted">RSVP unavailable (refresh the page).</p>';
         }
-    } else if (isRegistered) {
+    } else if (attended) {
         if (!hasFeedback && eventId && csrf) {
             actionHtml = '<hr class="my-3">' +
-                '<h6 class="small text-uppercase text-muted mb-2">Post-event feedback</h6>' +
+                '<h6 class="small text-uppercase text-muted mb-2">Post-event feedback (anonymous)</h6>' +
+                '<p class="small text-muted mb-2">You checked in to this event. Your rating and comments are shared with organizers <strong>without your name</strong>.</p>' +
                 '<form method="post" action="' + escapeHtmlStudent(base + '/backend/auth/submit_event_feedback.php') + '">' +
                 '<input type="hidden" name="csrf_token" value="' + escapeHtmlStudent(csrf) + '">' +
                 '<input type="hidden" name="event_id" value="' + escapeHtmlStudent(String(eventId)) + '">' +
@@ -528,16 +628,16 @@ function showStudentEventDetails(eventLike) {
                 '<option value="1">1 – Poor</option>' +
                 '</select></div>' +
                 '<div class="mb-2">' +
-                '<label class="form-label small">Comment (optional)</label>' +
-                '<textarea name="comment" class="form-control form-control-sm" rows="2" maxlength="2000" placeholder="What did you think?"></textarea>' +
+                '<label class="form-label small">Comments (optional)</label>' +
+                '<textarea name="comment" class="form-control form-control-sm" rows="3" maxlength="2000" placeholder="How was the event? Suggestions?"></textarea>' +
                 '</div>' +
-                '<button type="submit" class="btn btn-outline-primary btn-sm">Submit feedback</button>' +
+                '<button type="submit" class="btn btn-outline-primary btn-sm">Submit anonymous feedback</button>' +
                 '</form>';
         } else if (hasFeedback) {
-            actionHtml = '<p class="mb-0 small text-muted mt-2"><i class="fas fa-check me-1"></i>Thanks — you already submitted feedback.</p>';
+            actionHtml = '<p class="mb-0 small text-muted mt-2"><i class="fas fa-check me-1"></i>Thanks — you already submitted anonymous feedback for this event.</p>';
         }
     } else {
-        actionHtml = '<p class="mb-0 small text-muted">This event has ended. Only registered attendees can leave feedback.</p>';
+        actionHtml = '<p class="mb-0 small text-muted">This event is finished or was marked ended by the organizer. <strong>Post-event feedback</strong> is only available if you attended using <strong>QR check-in</strong>.</p>';
     }
 
     const title = eventLike.title || 'Untitled';
@@ -577,6 +677,109 @@ function initStudentUpcomingEventClicks() {
     });
 }
 
+function studentEventFromUrgentPayload(ev) {
+    if (!ev || ev.id == null) return null;
+    var ymd = String(ev.date || '').trim();
+    return {
+        id: ev.id,
+        title: ev.title || 'Event',
+        start: ymd ? new Date(ymd + 'T12:00:00') : null,
+        extendedProps: {
+            event_id: ev.id,
+            event_date_ymd: ymd,
+            location: '',
+            description: 'Open your calendar for full details.',
+            department: 'ALL',
+            department_display: '',
+            max_capacity: null,
+            registration_count: 0,
+            is_registered: false,
+            has_feedback: false,
+            attended: true,
+            status: String(ev.status || '')
+        }
+    };
+}
+
+function initUrgentFeedbackPrompt() {
+    var openModal = String(window.__studentOpenModal || '').toLowerCase();
+    if (openModal === 'change_password' || openModal === 'settings') {
+        return;
+    }
+    var list = window.__studentPendingUrgentFeedback;
+    if (!Array.isArray(list) || !list.length) return;
+    try {
+        var until = parseInt(sessionStorage.getItem('eventify_urgent_feedback_snooze_until') || '0', 10);
+        if (until && Date.now() < until) return;
+    } catch (e) { /* ignore */ }
+
+    var modalEl = document.getElementById('studentUrgentFeedbackModal');
+    if (!modalEl || typeof bootstrap === 'undefined' || !bootstrap.Modal) return;
+
+    var body = document.getElementById('studentUrgentFeedbackModalBody');
+    if (body) {
+        var html = '<p class="mb-3 fw-semibold">You attended the event(s) below. Anonymous feedback is requested while it is still fresh.</p>' +
+            '<ul class="list-group list-group-flush">';
+        list.forEach(function (ev) {
+            var dateLine = '';
+            if (ev.date) {
+                try {
+                    var d = new Date(ev.date + 'T12:00:00');
+                    if (!isNaN(d.getTime())) {
+                        dateLine = d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+                    }
+                } catch (e2) { dateLine = String(ev.date); }
+            }
+            html += '<li class="list-group-item d-flex justify-content-between align-items-center flex-wrap gap-2 px-0">' +
+                '<span><strong>' + escapeHtmlStudent(String(ev.title || 'Event')) + '</strong>' +
+                (dateLine ? '<br><span class="small text-muted">' + escapeHtmlStudent(dateLine) + '</span>' : '') +
+                '</span>' +
+                '<button type="button" class="btn btn-primary btn-sm urgent-fb-open" data-event-id="' + escapeHtmlStudent(String(ev.id)) + '">' +
+                '<i class="fas fa-comment-dots me-1"></i>Give feedback</button></li>';
+        });
+        html += '</ul>';
+        body.innerHTML = html;
+        body.querySelectorAll('.urgent-fb-open').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var id = btn.getAttribute('data-event-id');
+                var urgent = Array.isArray(window.__studentPendingUrgentFeedback) ? window.__studentPendingUrgentFeedback : [];
+                var payload = urgent.find(function (x) { return String(x.id) === String(id); });
+                var events = Array.isArray(window.studentEvents) ? window.studentEvents : [];
+                var match = events.find(function (e) { return String(e.id) === String(id); });
+                var toShow = match || studentEventFromUrgentPayload(payload);
+                var inst = bootstrap.Modal.getInstance(modalEl);
+                if (inst) inst.hide();
+                if (toShow && typeof showStudentEventDetails === 'function') {
+                    setTimeout(function () { showStudentEventDetails(toShow); }, 320);
+                }
+            });
+        });
+    }
+
+    var snoozeBtn = document.getElementById('studentUrgentFeedbackSnoozeBtn');
+    if (snoozeBtn) {
+        snoozeBtn.onclick = function () {
+            try {
+                sessionStorage.setItem('eventify_urgent_feedback_snooze_until', String(Date.now() + 4 * 60 * 60 * 1000));
+            } catch (e3) { /* ignore */ }
+            var m = bootstrap.Modal.getInstance(modalEl);
+            if (m) m.hide();
+        };
+    }
+
+    setTimeout(function () {
+        try {
+            var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+            modal.show();
+            setTimeout(function () {
+                var backdrop = document.querySelector('.modal-backdrop');
+                if (backdrop) backdrop.style.zIndex = '1199';
+                modalEl.style.zIndex = '1200';
+            }, 10);
+        } catch (e4) { /* ignore */ }
+    }, 650);
+}
+
 // ===============================
 // CALENDAR TITLE UPDATE
 // ===============================
@@ -606,11 +809,7 @@ function initViewButtons() {
             
             // Handle "Today" button
             if (view === 'today') {
-                calendar.today();
-                const focus = calendar.getDate ? calendar.getDate() : new Date();
-                currentDate = new Date(focus);
-                selectedDate = new Date(focus);
-                if (renderMiniCalendar) renderMiniCalendar();
+                jumpStudentCalendarToToday({ syncActiveButton: false });
             } else {
                 // Change view
                 calendar.changeView(view);

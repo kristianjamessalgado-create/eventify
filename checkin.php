@@ -247,7 +247,8 @@ $pageTitle = $event ? htmlspecialchars($event['title']) : 'Event Check-in';
                     <?php endif; ?>
                 </div>
                 <p class="small text-muted mb-2">Scan this QR at the event to confirm your attendance. Only students can check in.</p>
-                <p class="small text-muted mb-3">Check-in security is currently using account/device checks only. Live location is temporarily disabled.</p>
+                <p class="small text-muted mb-2"><strong>Fair use:</strong> each device (browser on this phone or computer) can only confirm <strong>one student account</strong> for this event. That helps prevent one phone from being passed around to fake attendance for several accounts.</p>
+                <p class="small text-muted mb-3">Check-in security uses this device fingerprint plus your account. Live location is temporarily disabled.</p>
                 <form method="POST" id="checkinForm">
                     <?= csrf_field() ?>
                     <input type="hidden" name="geo_lat" id="geo_lat" value="">

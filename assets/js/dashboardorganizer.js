@@ -2,6 +2,57 @@
 let calendar = null;
 const EVENTIFY_ROLE = (window.currentRole || 'organizer').toLowerCase();
 
+/** Sidebar filter: event row matches selected department (supports JSON multi-audience). */
+function eventifyEventDeptMatchesFilter(eventDept, filterDept) {
+    const f = String(filterDept || 'ALL').trim();
+    const ev = String(eventDept || 'ALL').trim();
+    if (f === 'ALL' || f === '') {
+        return true;
+    }
+    if (ev === '' || ev === 'ALL') {
+        return true;
+    }
+    if (ev === f) {
+        return true;
+    }
+    if (ev.charAt(0) === '[') {
+        try {
+            const arr = JSON.parse(ev);
+            if (Array.isArray(arr)) {
+                return arr.indexOf(f) !== -1;
+            }
+        } catch (e) {
+            /* ignore */
+        }
+    }
+    return false;
+}
+
+function eventifyOrganizerTodayYmd() {
+    const d = new Date();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return d.getFullYear() + '-' + m + '-' + day;
+}
+
+function eventifyFormatStoredDeptForModal(stored) {
+    const d = String(stored || 'ALL').trim();
+    if (d === '' || d === 'ALL') {
+        return 'All Departments';
+    }
+    if (d.charAt(0) === '[') {
+        try {
+            const arr = JSON.parse(d);
+            if (Array.isArray(arr) && arr.length) {
+                return arr.join(' · ');
+            }
+        } catch (e) {
+            /* ignore */
+        }
+    }
+    return d;
+}
+
 /**
  * Fill event details modal from a FullCalendar EventApi (shared: calendar click, admin upcoming list).
  */
@@ -43,10 +94,10 @@ function eventifyFillAndShowEventDetails(event) {
         descEl.textContent = props.description || 'No description provided.';
     }
 
-    const dept = (props.department || 'ALL');
     const deptEl = document.getElementById('eventDepartment');
     if (deptEl) {
-        deptEl.textContent = (dept === 'ALL') ? 'All Departments' : dept;
+        const label = String(props.department_display || '').trim();
+        deptEl.textContent = label || eventifyFormatStoredDeptForModal(props.department);
     }
 
     const orgEl = document.getElementById('eventOrganizer');
@@ -116,6 +167,23 @@ function eventifyFillAndShowEventDetails(event) {
         }
     }
 
+    const markBtn = document.getElementById('organizerMarkEndedBtn');
+    if (markBtn) {
+        const ymd = String(props.event_date_ymd || '').trim();
+        const canMarkEnded =
+            EVENTIFY_ROLE === 'organizer' &&
+            status === 'active' &&
+            ymd !== '' &&
+            ymd <= eventifyOrganizerTodayYmd();
+        if (canMarkEnded && event.id) {
+            markBtn.style.display = 'inline-block';
+            markBtn.setAttribute('data-eventify-event-id', String(event.id));
+        } else {
+            markBtn.style.display = 'none';
+            markBtn.setAttribute('data-eventify-event-id', '');
+        }
+    }
+
     const modalEl = document.getElementById('eventDetailsModal');
     if (modalEl && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
         const eventModal = bootstrap.Modal.getOrCreateInstance(modalEl);
@@ -162,13 +230,221 @@ function isSameDay(a, b) {
     );
 }
 
+function initOrganizerSidebarToggle() {
+    const toggle = document.getElementById('organizerSidebarToggle');
+    const closeBtn = document.getElementById('organizerSidebarClose');
+    const backdrop = document.getElementById('organizerSidebarBackdrop');
+    const sidebar = document.getElementById('organizerSidebar');
+    const isMobileView = () => window.matchMedia('(max-width: 768px)').matches;
+
+    const refreshCalendarLayout = () => {
+        if (!calendar) return;
+        if (typeof calendar.updateSize === 'function') {
+            calendar.updateSize();
+        }
+    };
+
+    const refreshCalendarLayoutSmooth = () => {
+        [0, 90, 180, 280, 360].forEach(function (ms) {
+            setTimeout(refreshCalendarLayout, ms);
+        });
+    };
+
+    const closeMobileSidebar = () => document.body.classList.remove('organizer-sidebar-open');
+
+    if (toggle) {
+        toggle.addEventListener('click', function () {
+            if (isMobileView()) {
+                document.body.classList.add('organizer-sidebar-open');
+                return;
+            }
+            document.body.classList.toggle('organizer-sidebar-collapsed');
+            refreshCalendarLayoutSmooth();
+        });
+    }
+    if (closeBtn) closeBtn.addEventListener('click', closeMobileSidebar);
+    if (backdrop) backdrop.addEventListener('click', closeMobileSidebar);
+
+    if (sidebar) {
+        sidebar.addEventListener('transitionend', function (e) {
+            if (e.propertyName === 'width' || e.propertyName === 'padding-left' || e.propertyName === 'padding-right') {
+                refreshCalendarLayout();
+            }
+        });
+        sidebar.addEventListener('click', function (e) {
+            const target = e.target.closest('.action-btn, [data-bs-toggle="modal"]');
+            if (target && isMobileView()) closeMobileSidebar();
+        });
+    }
+
+    window.addEventListener('resize', function () {
+        if (!isMobileView()) closeMobileSidebar();
+        refreshCalendarLayoutSmooth();
+    });
+}
+
 // Initialize on DOM ready
+function initCreateEventDeptAudience() {
+    const form = document.getElementById('createEventModalForm');
+    if (!form) {
+        return;
+    }
+    const allCb = document.getElementById('ceDeptAll');
+    const specifics = form.querySelectorAll('.ce-dept-specific');
+    if (allCb) {
+        allCb.addEventListener('change', function () {
+            if (allCb.checked) {
+                specifics.forEach(function (cb) {
+                    cb.checked = false;
+                });
+            }
+        });
+    }
+    specifics.forEach(function (cb) {
+        cb.addEventListener('change', function () {
+            if (cb.checked && allCb) {
+                allCb.checked = false;
+            }
+        });
+    });
+    form.addEventListener('submit', function (e) {
+        const anySpecific = Array.from(specifics).some(function (c) {
+            return c.checked;
+        });
+        const allOn = allCb && allCb.checked;
+        if (!allOn && !anySpecific) {
+            e.preventDefault();
+            alert('Please choose "All departments" or select at least one department.');
+        }
+    });
+}
+
+function eventifyOrganizerStatusUpdateUrl() {
+    const b = String(typeof window.BASE_URL !== 'undefined' ? window.BASE_URL : '/school_events').replace(/\/+$/, '');
+    return b + '/backend/auth/update_organizer_event_status.php';
+}
+
+let eventifyOrganizerStatusPending = null;
+
+function eventifyOpenOrganizerEventStatusModal(opts) {
+    eventifyOrganizerStatusPending = {
+        action: opts.action,
+        eventId: String(opts.eventId)
+    };
+    const titleEl = document.getElementById('organizerEventStatusConfirmTitle');
+    const bodyEl = document.getElementById('organizerEventStatusConfirmBody');
+    if (titleEl) {
+        titleEl.textContent = opts.title || 'Confirm';
+    }
+    if (bodyEl) {
+        bodyEl.textContent = opts.body || '';
+    }
+    const modalEl = document.getElementById('organizerEventStatusConfirmModal');
+    if (modalEl && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    }
+}
+
+function initOrganizerEventStatusModal() {
+    const statusModal = document.getElementById('organizerEventStatusConfirmModal');
+    if (statusModal && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+        statusModal.addEventListener('shown.bs.modal', function () {
+            statusModal.style.zIndex = '2000';
+            const backs = document.querySelectorAll('.modal-backdrop');
+            backs.forEach(function (b, i) {
+                if (i === backs.length - 1) {
+                    b.style.zIndex = '1990';
+                }
+            });
+        });
+        statusModal.addEventListener('hidden.bs.modal', function () {
+            statusModal.style.zIndex = '';
+            document.querySelectorAll('.modal-backdrop').forEach(function (b) {
+                b.style.zIndex = '';
+            });
+        });
+    }
+
+    const yesBtn = document.getElementById('organizerEventStatusConfirmYes');
+    const form = document.getElementById('organizerEventStatusHiddenForm');
+    if (yesBtn && form) {
+        yesBtn.addEventListener('click', function () {
+            if (!eventifyOrganizerStatusPending) {
+                return;
+            }
+            const evIdInput = document.getElementById('organizerEventStatusHiddenEventId');
+            const actInput = document.getElementById('organizerEventStatusHiddenAction');
+            if (evIdInput) {
+                evIdInput.value = eventifyOrganizerStatusPending.eventId;
+            }
+            if (actInput) {
+                actInput.value = eventifyOrganizerStatusPending.action;
+            }
+            form.action = eventifyOrganizerStatusUpdateUrl();
+            const confirmModal = document.getElementById('organizerEventStatusConfirmModal');
+            if (confirmModal && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                const inst = bootstrap.Modal.getInstance(confirmModal);
+                if (inst) {
+                    inst.hide();
+                }
+            }
+            form.submit();
+        });
+    }
+
+    document.body.addEventListener('click', function (e) {
+        const btn = e.target.closest('.js-organizer-event-status-btn');
+        if (!btn) {
+            return;
+        }
+        const action = btn.getAttribute('data-eventify-action') || '';
+        const eventId = btn.getAttribute('data-eventify-event-id') || '';
+        if (!eventId || (action !== 'close' && action !== 'cancel')) {
+            return;
+        }
+        if (action === 'cancel') {
+            eventifyOpenOrganizerEventStatusModal({
+                action: 'cancel',
+                eventId: eventId,
+                title: 'Withdraw submission?',
+                body: 'This event will no longer be pending approval.'
+            });
+        } else {
+            eventifyOpenOrganizerEventStatusModal({
+                action: 'close',
+                eventId: eventId,
+                title: 'Mark event as ended?',
+                body: 'Students will no longer be able to check in for this event.'
+            });
+        }
+    });
+
+    const markEndedBtn = document.getElementById('organizerMarkEndedBtn');
+    if (markEndedBtn) {
+        markEndedBtn.addEventListener('click', function () {
+            const eventId = markEndedBtn.getAttribute('data-eventify-event-id') || '';
+            if (!eventId) {
+                return;
+            }
+            eventifyOpenOrganizerEventStatusModal({
+                action: 'close',
+                eventId: eventId,
+                title: 'Mark event as ended?',
+                body: 'Students will no longer be able to check in for this event.'
+            });
+        });
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function() {
+    initOrganizerSidebarToggle();
     initMiniCalendar();
     initFullCalendar();
     initDepartmentFilter();
     initViewButtons();
     initCalendarNavigation();
+    initCreateEventDeptAudience();
+    initOrganizerEventStatusModal();
 
     var orgSettingsForm = document.getElementById('organizerSettingsForm');
     var orgSettingsBtn = document.getElementById('organizerSettingsUpdateBtn');
@@ -182,6 +458,21 @@ document.addEventListener('DOMContentLoaded', function() {
         orgSettingsConfirmYes.addEventListener('click', function () {
             orgSettingsConfirmModal.hide();
             orgSettingsForm.submit();
+        });
+    }
+
+    var clearNotifModal = document.getElementById('organizerClearNotifsModal');
+    if (clearNotifModal && typeof bootstrap !== 'undefined') {
+        clearNotifModal.addEventListener('show.bs.modal', function () {
+            document.querySelectorAll('.top-navbar .dropdown-menu.show').forEach(function (menu) {
+                var toggle = menu.previousElementSibling;
+                if (toggle && toggle.getAttribute('data-bs-toggle') === 'dropdown') {
+                    var inst = bootstrap.Dropdown.getInstance(toggle);
+                    if (inst) {
+                        inst.hide();
+                    }
+                }
+            });
         });
     }
 });
@@ -368,7 +659,7 @@ function initFullCalendar() {
         }
         return window.eventsData.filter(event => {
             const dept = event.extendedProps?.department || 'ALL';
-            return dept === selectedDepartment || dept === 'ALL';
+            return eventifyEventDeptMatchesFilter(dept, selectedDepartment);
         });
     }
 

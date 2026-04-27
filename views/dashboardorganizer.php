@@ -7,6 +7,7 @@ $organizer_department_choices = $organizer_department_choices ?? [];
 $staff_messaging_unread = isset($staff_messaging_unread) ? (int) $staff_messaging_unread : 0;
 $messengerHref = BASE_URL . '/backend/messaging/staff_messenger.php';
 $fb = $feedbackStats ?? ['total_feedback' => 0, 'avg_rating' => 0, 'five_star' => 0];
+$feedback_comments_anon = $feedback_comments_anon ?? [];
 $eventsHasGeo = !empty($eventsHasGeo);
 ?>
 <!DOCTYPE html>
@@ -35,6 +36,9 @@ $eventsHasGeo = !empty($eventsHasGeo);
 <!-- Top Navigation Bar -->
 <nav class="top-navbar">
     <div class="navbar-left">
+        <button type="button" class="nav-btn sidebar-toggle-mobile" id="organizerSidebarToggle" aria-label="Toggle menu" title="Menu">
+            <i class="fas fa-bars"></i>
+        </button>
         <div class="brand-logo">
             <i class="fas fa-calendar-alt"></i>
             <span>EVENTIFY</span>
@@ -95,7 +99,9 @@ $eventsHasGeo = !empty($eventsHasGeo);
                         <a class="dropdown-item small text-center py-2" href="<?= BASE_URL ?>/backend/auth/mark_notification_read.php?mark_all=1"><i class="fas fa-check-double me-1"></i> Mark all as read</a>
                     </li>
                     <li>
-                        <a class="dropdown-item small text-center py-2 text-danger" href="<?= BASE_URL ?>/backend/auth/mark_notification_read.php?clear_all=1" onclick="return confirm('Clear all notifications? This cannot be undone.');"><i class="fas fa-trash me-1"></i> Clear all</a>
+                        <button type="button" class="dropdown-item small text-center py-2 text-danger" data-bs-toggle="modal" data-bs-target="#organizerClearNotifsModal">
+                            <i class="fas fa-trash me-1"></i> Clear all
+                        </button>
                     </li>
                 <?php endif; ?>
             </ul>
@@ -148,8 +154,10 @@ $eventsHasGeo = !empty($eventsHasGeo);
 
 <!-- Main Layout -->
 <div class="dashboard-layout">
+    <div class="sidebar-backdrop" id="organizerSidebarBackdrop" aria-hidden="true"></div>
     <!-- Left Sidebar -->
-    <aside class="sidebar">
+    <aside class="sidebar" id="organizerSidebar">
+        <button type="button" class="sidebar-close-mobile" id="organizerSidebarClose" aria-label="Close menu"><i class="fas fa-times"></i></button>
         <!-- Mini Calendar -->
         <div class="mini-calendar-widget">
             <div class="mini-calendar-header">
@@ -280,7 +288,7 @@ $eventsHasGeo = !empty($eventsHasGeo);
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
-        <p class="text-muted small mb-3">Totals across feedback left on your events (when students submit ratings).</p>
+        <p class="text-muted small mb-3">Totals from students who <strong>attended</strong> your events (QR check-in). Comments are <strong>anonymous</strong>—names are not shown.</p>
         <div class="row g-3">
           <div class="col-12">
             <div class="border rounded-3 p-3 bg-light">
@@ -301,6 +309,24 @@ $eventsHasGeo = !empty($eventsHasGeo);
             </div>
           </div>
         </div>
+        <?php if (!empty($feedback_comments_anon)): ?>
+          <hr class="my-3">
+          <h6 class="small text-uppercase text-muted mb-2">Recent anonymous comments</h6>
+          <ul class="list-unstyled mb-0 small" style="max-height: 220px; overflow-y: auto;">
+            <?php foreach ($feedback_comments_anon as $fc): ?>
+              <li class="border rounded p-2 mb-2 bg-white">
+                <div class="d-flex justify-content-between gap-2 mb-1">
+                  <span class="fw-semibold text-truncate"><?= htmlspecialchars((string)($fc['event_title'] ?? 'Event')) ?></span>
+                  <span class="text-warning text-nowrap"><i class="fas fa-star me-1"></i><?= (int)($fc['rating'] ?? 0) ?>/5</span>
+                </div>
+                <div class="text-muted" style="font-size: 0.8rem;"><?= date('M j, Y', strtotime($fc['created_at'] ?? 'now')) ?></div>
+                <div class="mt-1"><?= nl2br(htmlspecialchars((string)($fc['comment'] ?? ''))) ?></div>
+              </li>
+            <?php endforeach; ?>
+          </ul>
+        <?php else: ?>
+          <p class="small text-muted mb-0 mt-2">No written comments yet. Students can add optional comments with their rating after they attend.</p>
+        <?php endif; ?>
       </div>
       <div class="modal-footer border-0 pt-0">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
@@ -343,7 +369,7 @@ $eventsHasGeo = !empty($eventsHasGeo);
                   </p>
                   <p class="event-meta">
                     <i class="fas fa-users"></i>
-                    <?= htmlspecialchars(($event['department'] ?? 'ALL') === 'ALL' ? 'All Departments' : ($event['department'] ?? 'ALL')) ?>
+                    <?= htmlspecialchars(eventify_format_department_label((string)($event['department'] ?? 'ALL'))) ?>
                   </p>
                   <?php
                   $evStatus = $event['status'] ?? '';
@@ -366,13 +392,15 @@ $eventsHasGeo = !empty($eventsHasGeo);
                         <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-key me-1"></i>Verify OTP</button>
                       </form>
                     <?php endif; ?>
-                    <?php if (in_array($evStatusLower, ['active', 'pending'], true)): ?>
-                      <form method="POST" action="<?= BASE_URL ?>/backend/auth/update_organizer_event_status.php" class="d-inline" onsubmit="return confirm('This will close this event for participants. Continue?');">
-                        <?= csrf_field() ?>
-                        <input type="hidden" name="event_id" value="<?= (int)$event['id'] ?>">
-                        <input type="hidden" name="action" value="close">
-                        <button type="submit" class="btn btn-sm btn-outline-danger"><i class="fas fa-ban"></i> Close</button>
-                      </form>
+                    <?php
+                    $todayYmd = date('Y-m-d');
+                    $evDateYmd = !empty($event['date']) ? substr(trim((string) $event['date']), 0, 10) : '';
+                    $canMarkEnded = ($evStatusLower === 'active' && $evDateYmd !== '' && $evDateYmd <= $todayYmd);
+                    ?>
+                    <?php if ($evStatusLower === 'pending'): ?>
+                      <button type="button" class="btn btn-sm btn-outline-secondary js-organizer-event-status-btn" data-eventify-action="cancel" data-eventify-event-id="<?= (int)$event['id'] ?>"><i class="fas fa-undo"></i> Withdraw</button>
+                    <?php elseif ($canMarkEnded): ?>
+                      <button type="button" class="btn btn-sm btn-outline-secondary js-organizer-event-status-btn" data-eventify-action="close" data-eventify-event-id="<?= (int)$event['id'] ?>"><i class="fas fa-flag-checkered"></i> Mark as ended</button>
                     <?php endif; ?>
                   </div>
                 </div>
@@ -592,6 +620,25 @@ $eventsHasGeo = !empty($eventsHasGeo);
   </div>
 </div>
 
+<!-- Clear all notifications (in-app) -->
+<div class="modal fade" id="organizerClearNotifsModal" tabindex="-1" aria-labelledby="organizerClearNotifsModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title" id="organizerClearNotifsModalLabel"><i class="fas fa-trash-alt me-2 text-danger"></i>Clear all notifications?</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body pt-2">
+        <p class="mb-0 small">This removes every in-app notification for your account. It cannot be undone.</p>
+      </div>
+      <div class="modal-footer border-0 pt-0">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <a class="btn btn-danger" href="<?= htmlspecialchars(BASE_URL . '/backend/auth/mark_notification_read.php?clear_all=1') ?>">Yes, clear all</a>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Logout Modal -->
 <div class="modal fade" id="logoutModal" tabindex="-1" aria-labelledby="logoutModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
@@ -642,7 +689,7 @@ $eventsHasGeo = !empty($eventsHasGeo);
             <div class="col-md-4">
               <label for="ceEndTime" class="form-label">End Time</label>
               <input type="time" name="end_time" id="ceEndTime" class="form-control">
-              <small class="text-muted">Optional — leave blank if not fixed.</small>
+              <small class="text-muted">Optional — leave blank if the event has no fixed end. Active events then auto-complete after that calendar day (end of day). On the event date you can also <strong>Mark as ended</strong> anytime from My Events or the calendar details.</small>
             </div>
           </div>
           <div class="mb-3 mt-3">
@@ -663,18 +710,25 @@ $eventsHasGeo = !empty($eventsHasGeo);
             <small class="text-muted">Coordinates are required after you run the database migration for latitude and longitude.</small>
             <?php endif; ?>
           </div>
-          <div class="mb-3">
-            <label for="ceDepartment" class="form-label">Department / Audience <span class="text-danger">*</span></label>
-            <select id="ceDepartment" name="department" class="form-select" required>
-              <option value="ALL">All Departments</option>
-              <option value="High school department">High School Department</option>
-              <option value="College of Communication, Information and Technology">College of Communication, Information and Technology</option>
-              <option value="College of Accountancy and Business">College of Accountancy and Business</option>
-              <option value="School of Law and Political Science">School of Law and Political Science</option>
-              <option value="College of Education">College of Education</option>
-              <option value="College of Nursing and Allied health sciences">College of Nursing and Allied health sciences</option>
-              <option value="College of Hospitality Management">College of Hospitality Management</option>
-            </select>
+          <div class="mb-3 ce-dept-audience">
+            <label class="form-label">Department / Audience <span class="text-danger">*</span></label>
+            <p class="text-muted small mb-2">Tap <strong>All departments</strong> for a school-wide event, or select one or more departments (e.g. two colleges).</p>
+            <div class="form-check mb-2">
+              <input class="form-check-input" type="checkbox" name="department[]" value="ALL" id="ceDeptAll" checked>
+              <label class="form-check-label fw-semibold" for="ceDeptAll">All departments</label>
+            </div>
+            <div class="border rounded p-2 bg-light ce-dept-checkbox-list" style="max-height: 220px; overflow-y: auto;">
+              <?php foreach ($organizer_department_choices as $deptVal => $deptLabel): ?>
+                <?php if ($deptVal === 'ALL') {
+                    continue;
+                } ?>
+                <?php $ceCbId = 'ce_dept_' . substr(md5($deptVal), 0, 14); ?>
+                <div class="form-check">
+                  <input class="form-check-input ce-dept-specific" type="checkbox" name="department[]" value="<?= htmlspecialchars($deptVal) ?>" id="<?= htmlspecialchars($ceCbId) ?>">
+                  <label class="form-check-label" for="<?= htmlspecialchars($ceCbId) ?>"><?= htmlspecialchars($deptLabel) ?></label>
+                </div>
+              <?php endforeach; ?>
+            </div>
           </div>
         </div>
         <div class="modal-footer">
@@ -712,6 +766,8 @@ window.eventsData = <?= json_encode(array_map(function($e) use ($user_name) {
             'editUrl'       => 'edit_event.php?id=' . $e['id'],
             'organizer'     => $user_name,
             'department'    => $e['department'] ?? 'ALL',
+            'department_display' => eventify_format_department_label((string)($e['department'] ?? 'ALL')),
+            'event_date_ymd' => !empty($e['date']) ? substr(trim((string) $e['date']), 0, 10) : '',
         ],
     ];
 }, $events), JSON_HEX_TAG|JSON_HEX_APOS|JSON_HEX_QUOT|JSON_HEX_AMP); ?>;
@@ -748,6 +804,7 @@ window.__organizerSettings = <?= json_encode($organizer_settings, JSON_HEX_TAG|J
         <a href="#" id="eventEditLink" class="btn btn-primary">Edit Event</a>
         <a href="#" id="eventQrLink" class="btn btn-outline-secondary" target="_blank" rel="noopener" style="display:none;"><i class="fas fa-qrcode me-1"></i> Show QR</a>
         <a href="#" id="eventAttendanceLink" class="btn btn-outline-info" target="_blank" rel="noopener" style="display:none;"><i class="fas fa-clipboard-check me-1"></i> Attendance</a>
+        <button type="button" class="btn btn-outline-secondary" id="organizerMarkEndedBtn" style="display:none;" data-eventify-event-id=""><i class="fas fa-flag-checkered me-1"></i>Mark as ended</button>
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
       </div>
     </div>
@@ -854,6 +911,29 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 
+<!-- Last in DOM so it stacks above other modals (My Events, event details). Confirm footer stays clickable. -->
+<div class="modal fade" id="organizerEventStatusConfirmModal" tabindex="-1" aria-labelledby="organizerEventStatusConfirmLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="organizerEventStatusConfirmLabel"><i class="fas fa-flag-checkered me-2 text-secondary"></i><span id="organizerEventStatusConfirmTitle">Confirm</span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-0" id="organizerEventStatusConfirmBody"></p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="organizerEventStatusConfirmYes"><i class="fas fa-check me-1"></i>Confirm</button>
+      </div>
+    </div>
+  </div>
+</div>
+<form id="organizerEventStatusHiddenForm" method="POST" action="#" style="display:none" aria-hidden="true">
+  <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(function_exists('csrf_token') ? csrf_token() : '') ?>">
+  <input type="hidden" name="event_id" id="organizerEventStatusHiddenEventId" value="">
+  <input type="hidden" name="action" id="organizerEventStatusHiddenAction" value="">
+</form>
 
 </body>
 </html>

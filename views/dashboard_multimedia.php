@@ -5,6 +5,7 @@ if (!isset($msg)) $msg = '';
 $user = $user ?? ['name' => $user_name, 'user_id' => 'N/A', 'department' => null, 'profile_picture' => null];
 $department = $user['department'] ?? null;
 $upcomingEvents = $upcomingEvents ?? [];
+$photoStatusEnabled = (bool) ($photoStatusEnabled ?? false);
 
 $totalEvents = is_array($events) ? count($events) : 0;
 $totalPhotos = 0;
@@ -149,6 +150,17 @@ if (is_array($events)) {
                 </div>
             </div>
 
+            <?php if (!$photoStatusEnabled): ?>
+                <div class="alert alert-warning mm-migration-hint d-flex align-items-start gap-2 mb-0 mt-3" role="status">
+                    <i class="fas fa-database mt-1 flex-shrink-0"></i>
+                    <div class="small">
+                        <strong>Publish is unavailable until the database is updated.</strong>
+                        Your <code>event_photos</code> table is missing the <code>status</code> column, so the dashboard cannot count drafts and keeps Publish disabled.
+                        Run <code>migrations/event_photos_publish_columns.sql</code> in phpMyAdmin (or MySQL), then refresh this page. New uploads will stay as drafts until you publish them.
+                    </div>
+                </div>
+            <?php endif; ?>
+
             <div class="toolbar-row">
                 <div class="search-wrap">
                     <i class="fas fa-search"></i>
@@ -182,6 +194,14 @@ if (is_array($events)) {
                         $location = (string)($ev['location'] ?? '');
                         $myCount = (int)($ev['my_photo_count'] ?? 0);
                         $myDraftCount = (int)($ev['my_draft_count'] ?? 0);
+                        $canPublish = $photoStatusEnabled && $myDraftCount > 0;
+                        if (!$photoStatusEnabled) {
+                            $publishHelpTitle = 'Publishing needs the status column. Run migrations/event_photos_publish_columns.sql on your database, then refresh this page.';
+                        } elseif ($myDraftCount <= 0) {
+                            $publishHelpTitle = 'No draft photos for this event. Upload new images (they are saved as drafts) or your photos are already published.';
+                        } else {
+                            $publishHelpTitle = 'Publish your draft photos for students';
+                        }
                         $previewPath = null;
                         if (!empty($photosByEvent) && isset($photosByEvent[$eid]) && !empty($photosByEvent[$eid][0]['file_path'])) {
                             $previewPath = $photosByEvent[$eid][0]['file_path'];
@@ -238,16 +258,26 @@ if (is_array($events)) {
                                     data-event-title="<?= htmlspecialchars($title) ?>">
                                 <i class="fas fa-cloud-upload-alt"></i> Upload
                             </button>
-                            <form method="POST" action="<?= BASE_URL ?>/backend/auth/publish_event_photos.php" class="d-inline">
-                                <?= csrf_field() ?>
-                                <input type="hidden" name="event_id" value="<?= $eid ?>">
-                                <button type="submit"
-                                        class="btn btn-outline-success <?= $myDraftCount <= 0 ? 'disabled' : '' ?>"
-                                        <?= $myDraftCount <= 0 ? 'disabled aria-disabled="true"' : '' ?>
-                                        title="Publish your draft photos for students">
+                            <?php if ($canPublish): ?>
+                                <button type="button"
+                                        class="btn btn-outline-success mm-publish-btn"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#publishPhotosModal"
+                                        data-event-id="<?= $eid ?>"
+                                        data-event-title="<?= htmlspecialchars($title, ENT_QUOTES, 'UTF-8') ?>"
+                                        data-draft-count="<?= (int)$myDraftCount ?>"
+                                        title="<?= htmlspecialchars($publishHelpTitle) ?>">
                                     <i class="fas fa-bullhorn"></i> Publish
                                 </button>
-                            </form>
+                            <?php else: ?>
+                                <button type="button"
+                                        class="btn btn-outline-success mm-publish-btn disabled"
+                                        disabled
+                                        aria-disabled="true"
+                                        title="<?= htmlspecialchars($publishHelpTitle) ?>">
+                                    <i class="fas fa-bullhorn"></i> Publish
+                                </button>
+                            <?php endif; ?>
                             <button type="button"
                                     class="btn btn-outline-secondary btn-gallery <?= empty($ev['photo_count']) ? 'disabled' : '' ?>"
                                     <?= empty($ev['photo_count']) ? 'disabled aria-disabled="true"' : '' ?>
@@ -311,7 +341,7 @@ if (is_array($events)) {
                                     <div class="mm-upcoming-meta">
                                         <span><i class="fas fa-map-marker-alt"></i> <?= htmlspecialchars($ev['location'] ?? 'TBA') ?></span>
                                         <span class="dot">·</span>
-                                        <span class="pill"><?= htmlspecialchars(($ev['department'] ?? 'ALL') === 'ALL' ? 'All Departments' : ($ev['department'] ?? '')) ?></span>
+                                        <span class="pill"><?= htmlspecialchars(eventify_format_department_label((string)($ev['department'] ?? 'ALL'))) ?></span>
                                     </div>
                                     <?php if (!empty($ev['description'])): ?>
                                         <div class="mm-upcoming-desc">
@@ -494,6 +524,34 @@ if (is_array($events)) {
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-danger" id="deletePhotoConfirmBtn"><i class="fas fa-trash-alt me-1"></i> Yes, Delete</button>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Publish draft photos confirmation -->
+<div class="modal fade" id="publishPhotosModal" tabindex="-1" aria-labelledby="publishPhotosModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="publishPhotosModalLabel"><i class="fas fa-bullhorn me-2"></i>Publish photos</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" action="<?= BASE_URL ?>/backend/auth/publish_event_photos.php">
+                <?= csrf_field() ?>
+                <input type="hidden" name="event_id" id="publishPhotosEventId" value="">
+                <div class="modal-body">
+                    <p class="mb-0" id="publishPhotosMessage"></p>
+                    <small class="text-muted d-block mt-2">
+                        Only your draft uploads for this event will become visible in the student photo gallery.
+                    </small>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-check me-1"></i> Yes, publish
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -704,6 +762,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 var ok = !q || t.includes(q) || loc.includes(q);
                 card.style.display = ok ? '' : 'none';
             });
+        });
+    }
+
+    var publishPhotosModal = document.getElementById('publishPhotosModal');
+    if (publishPhotosModal) {
+        publishPhotosModal.addEventListener('show.bs.modal', function(e) {
+            var btn = e.relatedTarget;
+            var idEl = document.getElementById('publishPhotosEventId');
+            var msgEl = document.getElementById('publishPhotosMessage');
+            if (!btn || !idEl || !msgEl) return;
+            var eventId = btn.dataset.eventId || '';
+            var title = btn.dataset.eventTitle || '';
+            var drafts = parseInt(btn.dataset.draftCount || '0', 10) || 0;
+            idEl.value = eventId;
+            var noun = drafts === 1 ? 'draft photo' : 'draft photos';
+            msgEl.textContent = 'Publish ' + drafts + ' ' + noun + ' for "' + title + '"? Students with the gallery link will be able to see them.';
         });
     }
 

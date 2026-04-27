@@ -6,21 +6,36 @@ $checkin_token = trim($_GET['t'] ?? '');
 $auth_modal = trim((string)($_GET['auth_modal'] ?? ''));
 $auth_error = trim((string)($_GET['auth_error'] ?? ''));
 $auth_success = trim((string)($_GET['auth_success'] ?? ''));
+$studentCourseOptions = [];
+$studentYearLevelOptions = [];
+try {
+    require_once __DIR__ . '/config/student_profile_fields.php';
+    if (function_exists('eventify_student_course_program_options')) {
+        $studentCourseOptions = eventify_student_course_program_options();
+    }
+    if (function_exists('eventify_student_year_level_options')) {
+        $studentYearLevelOptions = eventify_student_year_level_options();
+    }
+} catch (Throwable $e) {
+    $studentCourseOptions = [];
+    $studentYearLevelOptions = [];
+}
 
 // Public landing: show upcoming active events on a calendar (login required to view details/RSVP)
 $publicCalendarEvents = [];
 $publicUpcomingList = [];
 $publicPastList = [];
 $publicAllList = [];
+$publicPhotoPreviewList = [];
 try {
     include __DIR__ . '/config/db.php';
     include __DIR__ . '/config/config.php';
     include __DIR__ . '/config/csrf.php';
     $today = date('Y-m-d');
     $stmtPub = $conn->prepare("
-        SELECT id, title, description, date, start_time, end_time, location, department
+        SELECT id, title, description, date, start_time, end_time, location, department, status
         FROM events
-        WHERE status = 'active'
+        WHERE status IN ('active','completed','closed')
         ORDER BY date DESC, start_time DESC, id DESC
         LIMIT 400
     ");
@@ -43,6 +58,7 @@ try {
                     'end_time' => $endTime,
                     'location' => (string)($row['location'] ?? ''),
                     'department' => (string)($row['department'] ?? 'ALL'),
+                    'status' => (string)($row['status'] ?? 'active'),
                 ];
                 $publicCalendarEvents[] = [
                     'id' => (int)($row['id'] ?? 0),
@@ -53,12 +69,72 @@ try {
                     'extendedProps' => [
                         'location' => $row['location'] ?? '',
                         'department' => $row['department'] ?? 'ALL',
+                        'status' => $row['status'] ?? '',
                     ],
                 ];
             }
         }
         $stmtPub->close();
     }
+    // Landing photo preview rail (prefer published-only if migration exists)
+    $photoStatusEnabled = false;
+    try {
+        $colRes = $conn->query("SHOW COLUMNS FROM event_photos LIKE 'status'");
+        $photoStatusEnabled = (bool)($colRes && $colRes->num_rows > 0);
+    } catch (Throwable $e) {
+        $photoStatusEnabled = false;
+    }
+
+    $photoSql = "
+        SELECT p.file_path, p.created_at, e.id AS event_id, e.title, e.date
+        FROM event_photos p
+        INNER JOIN events e ON e.id = p.event_id
+        WHERE e.title NOT LIKE 'sample%'
+    ";
+    if ($photoStatusEnabled) {
+        $photoSql .= " AND p.status = 'published' ";
+    }
+    // Pull a wider pool first, then group in PHP (1 card per event, rotating photos per event).
+    $photoSql .= " ORDER BY p.created_at DESC, p.id DESC LIMIT 220 ";
+
+    $stmtPhotos = $conn->prepare($photoSql);
+    if ($stmtPhotos && $stmtPhotos->execute()) {
+        $resPhotos = $stmtPhotos->get_result();
+        $photoGroupsByEvent = [];
+        $eventOrder = [];
+        while ($photo = $resPhotos->fetch_assoc()) {
+            $path = trim((string)($photo['file_path'] ?? ''));
+            if ($path === '') continue;
+            $eventId = (int)($photo['event_id'] ?? 0);
+            if ($eventId < 1) continue;
+
+            if (!isset($photoGroupsByEvent[$eventId])) {
+                $photoGroupsByEvent[$eventId] = [
+                    'event_title' => (string)($photo['title'] ?? 'School event'),
+                    'event_date' => (string)($photo['date'] ?? ''),
+                    'photo_paths' => [],
+                ];
+                $eventOrder[] = $eventId;
+            }
+            // Keep a small set per event for fade rotation.
+            if (count($photoGroupsByEvent[$eventId]['photo_paths']) < 6) {
+                $photoGroupsByEvent[$eventId]['photo_paths'][] = $path;
+            }
+        }
+        foreach ($eventOrder as $eid) {
+            if (count($publicPhotoPreviewList) >= 24) break;
+            $group = $photoGroupsByEvent[$eid] ?? null;
+            if (!$group || empty($group['photo_paths'])) continue;
+            $publicPhotoPreviewList[] = [
+                'file_path' => (string)$group['photo_paths'][0],
+                'event_title' => (string)($group['event_title'] ?? 'School event'),
+                'event_date' => (string)($group['event_date'] ?? ''),
+                'photo_paths' => array_values($group['photo_paths']),
+            ];
+        }
+        $stmtPhotos->close();
+    }
+
     if (isset($conn) && $conn) {
         $conn->close();
     }
@@ -67,6 +143,7 @@ try {
     $publicUpcomingList = [];
     $publicPastList = [];
     $publicAllList = [];
+    $publicPhotoPreviewList = [];
 }
 
 // Split for display
@@ -142,6 +219,9 @@ if ($checkin_token !== '') {
     $checkin_redirect = $scheme . '://' . $host . BASE_URL . '/checkin.php?t=' . urlencode($checkin_token);
     $login_src .= '?redirect=' . urlencode($checkin_redirect);
 }
+
+$landing_upcoming_n = count($publicUpcomingList);
+$landing_past_n = count($publicPastList);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -150,48 +230,108 @@ if ($checkin_token !== '') {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>EVENTIFY</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-<link rel="stylesheet" href="/school_events/assets/css/index.css">
+<link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/index.css">
 <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet">
 </head>
 <body>
 
 <!-- Background layers -->
-<img src="/school_events/assets/img/gradient.png" alt="Background" class="bg-image">
+<img src="<?= BASE_URL ?>/assets/img/gradient.png" alt="Background" class="bg-image">
 <div class="layer-blur"></div>
+<div class="noise-overlay" aria-hidden="true"></div>
 
 <!-- Header -->
-<header>
-    <h2>EVENTIFY</h2>
-    <button type="button" class="hamburger" id="hamburgerBtn" aria-label="Open menu">
-        <span></span>
-        <span></span>
-        <span></span>
-    </button>
-    <nav class="desktop-nav">
-        <a onclick="goToSection('public-calendar')">Home</a>
-        <a onclick="goToSection('how-it-works')">How it works</a>
-        <a onclick="goToSection('features')">Features</a>
-        <a onclick="goToSection('roles')">Roles</a>
-        <a onclick="goToSection('faq')">FAQ</a>
-        <a href="javascript:void(0)" class="btn login-trigger" id="navGetStarted" data-login-url="<?= htmlspecialchars($login_src) ?>">Get Started</a>
-    </nav>
-    <div class="mobile-nav-overlay" id="mobileNavOverlay" onclick="closeMobileNav()" aria-hidden="true"></div>
-    <nav class="mobile-nav" id="mobileNav">
-        <a onclick="goToSection('public-calendar'); closeMobileNav();">Home</a>
-        <a onclick="goToSection('how-it-works'); closeMobileNav();">How it works</a>
-        <a onclick="goToSection('features'); closeMobileNav();">Features</a>
-        <a onclick="goToSection('roles'); closeMobileNav();">Roles</a>
-        <a onclick="goToSection('faq'); closeMobileNav();">FAQ</a>
-        <a href="javascript:void(0)" onclick="closeMobileNav()" class="btn login-trigger" data-login-url="<?= htmlspecialchars($login_src) ?>">Get Started</a>
-    </nav>
+<header class="site-header">
+    <div class="header-main">
+        <h2 class="brand-wordmark">EVENTIFY</h2>
+        <button type="button" class="hamburger" id="hamburgerBtn" aria-label="Open menu">
+            <span></span>
+            <span></span>
+            <span></span>
+        </button>
+        <nav class="desktop-nav">
+            <a onclick="goToSection('public-calendar')">Home</a>
+            <a onclick="goToSection('how-it-works')">How it works</a>
+            <a onclick="goToSection('features')">Features</a>
+            <a onclick="goToSection('roles')">Roles</a>
+            <a onclick="goToSection('faq')">FAQ</a>
+            <span class="magnetic-wrap">
+                <a href="javascript:void(0)" class="btn btn-shimmer login-trigger" id="navGetStarted" data-login-url="<?= htmlspecialchars($login_src) ?>">Get Started</a>
+            </span>
+        </nav>
+        <div class="mobile-nav-overlay" id="mobileNavOverlay" onclick="closeMobileNav()" aria-hidden="true"></div>
+        <nav class="mobile-nav" id="mobileNav">
+            <a onclick="goToSection('public-calendar'); closeMobileNav();">Home</a>
+            <a onclick="goToSection('how-it-works'); closeMobileNav();">How it works</a>
+            <a onclick="goToSection('features'); closeMobileNav();">Features</a>
+            <a onclick="goToSection('roles'); closeMobileNav();">Roles</a>
+            <a onclick="goToSection('faq'); closeMobileNav();">FAQ</a>
+            <a href="javascript:void(0)" onclick="closeMobileNav()" class="btn btn-shimmer login-trigger" data-login-url="<?= htmlspecialchars($login_src) ?>">Get Started</a>
+        </nav>
+    </div>
+    <div class="header-progress-track" aria-hidden="true">
+        <span class="header-progress-fill" id="landingScrollProgress"></span>
+    </div>
 </header>
 
 <!-- Sections -->
-<section id="public-calendar" class="active">
-    <h1>Upcoming events calendar</h1>
-    <p>Browse what’s coming up. To view full details and RSVP, you’ll be asked to log in.</p>
+<section id="public-calendar" class="active reveal-scope in-view">
+    <h1 class="reveal-item" style="--reveal-d: 0ms">Upcoming events calendar</h1>
+    <p class="reveal-item" style="--reveal-d: 70ms">Browse what’s coming up. To view full details and RSVP, you’ll be asked to log in.</p>
 
-    <div class="public-upcoming-wrap">
+    <div class="landing-stat-strip reveal-item" style="--reveal-d: 120ms">
+        <span class="stat-pill" title="Posted events (active or ended) on or after today."><strong><?= (int) $landing_upcoming_n ?></strong> <span class="stat-pill-label">from today</span></span>
+        <span class="stat-pill stat-pill-muted" title="Posted events (active or ended) before today."><strong><?= (int) $landing_past_n ?></strong> <span class="stat-pill-label">earlier</span></span>
+        <span class="stat-pill stat-pill-hint"><i class="fas fa-lock" aria-hidden="true"></i> Log in for details &amp; RSVP</span>
+    </div>
+
+    <div class="public-upcoming-wrap reveal-item" style="--reveal-d: 140ms">
+        <div class="landing-photo-header">
+            <h3 class="public-upcoming-title">Trending now</h3>
+            <span class="landing-photo-subtitle">Published moments from recent events</span>
+        </div>
+        <?php if (!empty($publicPhotoPreviewList)): ?>
+            <div class="landing-photo-rail-wrap">
+                <button type="button" class="landing-rail-nav landing-rail-prev" aria-label="Scroll previews left">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                <div class="landing-photo-rail" id="landingPhotoRail">
+                    <?php foreach ($publicPhotoPreviewList as $idx => $photo): ?>
+                        <?php
+                            $photoSrc = BASE_URL . '/' . ltrim((string)($photo['file_path'] ?? ''), '/');
+                            $photoTitle = (string)($photo['event_title'] ?? 'School event');
+                            $photoDate = '';
+                            try { $photoDate = date('M d, Y', strtotime((string)($photo['event_date'] ?? ''))); } catch (Throwable $e) { $photoDate = ''; }
+                            $rank = (int)$idx + 1;
+                            $photoPaths = array_values(array_filter((array)($photo['photo_paths'] ?? []), function ($p) {
+                                return is_string($p) && trim($p) !== '';
+                            }));
+                            $photoUrls = [];
+                            foreach ($photoPaths as $pp) {
+                                $photoUrls[] = BASE_URL . '/' . ltrim($pp, '/');
+                            }
+                        ?>
+                        <a class="landing-photo-card login-trigger" href="javascript:void(0)" data-login-url="<?= htmlspecialchars($login_src) ?>" data-photo-urls="<?= htmlspecialchars(json_encode($photoUrls, JSON_HEX_TAG|JSON_HEX_APOS|JSON_HEX_QUOT|JSON_HEX_AMP)) ?>" aria-label="Log in to view photos for <?= htmlspecialchars($photoTitle) ?>">
+                            <span class="landing-photo-rank"><?= $rank ?></span>
+                            <img class="landing-photo-img" src="<?= htmlspecialchars($photoSrc) ?>" alt="<?= htmlspecialchars($photoTitle) ?>" loading="lazy" decoding="async">
+                            <span class="landing-photo-overlay"></span>
+                            <span class="landing-photo-meta">
+                                <strong><?= htmlspecialchars($photoTitle) ?></strong>
+                                <?php if ($photoDate !== ''): ?><small><?= htmlspecialchars($photoDate) ?></small><?php endif; ?>
+                            </span>
+                        </a>
+                    <?php endforeach; ?>
+                </div>
+                <button type="button" class="landing-rail-nav landing-rail-next" aria-label="Scroll previews right">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+        <?php else: ?>
+            <div class="public-empty">No published photos yet.</div>
+        <?php endif; ?>
+    </div>
+
+    <div class="public-upcoming-wrap reveal-item" style="--reveal-d: 160ms">
         <h3 class="public-upcoming-title">Upcoming events</h3>
         <?php if (!empty($publicUpcomingList)): ?>
             <div class="public-upcoming-grid">
@@ -206,8 +346,10 @@ if ($checkin_token !== '') {
                       elseif ($st !== '') $timeLabel = $st;
                       $deptLabel = trim((string)($ev['department'] ?? ''));
                       $locLabel = trim((string)($ev['location'] ?? ''));
+                      $evSt = strtolower((string)($ev['status'] ?? ''));
+                      $isEndedCard = ($evSt === 'closed' || $evSt === 'completed');
                     ?>
-                    <a class="public-upcoming-card login-trigger" href="javascript:void(0)" data-login-url="<?= htmlspecialchars($login_src) ?>" aria-label="Log in to view <?= htmlspecialchars((string)($ev['title'] ?? 'event')) ?>">
+                    <a class="public-upcoming-card login-trigger<?= $isEndedCard ? ' public-upcoming-card-ended' : '' ?>" href="javascript:void(0)" data-login-url="<?= htmlspecialchars($login_src) ?>" aria-label="Log in to view <?= htmlspecialchars((string)($ev['title'] ?? 'event')) ?>">
                         <div class="public-upcoming-card-top">
                             <div class="public-upcoming-card-title"><?= htmlspecialchars((string)($ev['title'] ?? 'Untitled')) ?></div>
                             <div class="public-upcoming-card-meta">
@@ -216,6 +358,7 @@ if ($checkin_token !== '') {
                             </div>
                         </div>
                         <div class="public-upcoming-card-bottom">
+                            <?php if ($isEndedCard): ?><span class="chip chip-ended">Ended</span><?php endif; ?>
                             <?php if ($deptLabel !== ''): ?><span class="chip"><?= htmlspecialchars($deptLabel) ?></span><?php endif; ?>
                             <?php if ($locLabel !== ''): ?><span class="chip chip-muted"><?= htmlspecialchars($locLabel) ?></span><?php endif; ?>
                             <span class="chip chip-cta">Log in to view</span>
@@ -235,7 +378,7 @@ if ($checkin_token !== '') {
         <?php endif; ?>
     </div>
 
-    <div class="public-upcoming-wrap">
+    <div class="public-upcoming-wrap reveal-item" style="--reveal-d: 200ms">
         <h3 class="public-upcoming-title">Existing events</h3>
         <?php if (!empty($publicPastList)): ?>
             <div class="public-upcoming-grid">
@@ -250,8 +393,10 @@ if ($checkin_token !== '') {
                       elseif ($st !== '') $timeLabel = $st;
                       $deptLabel = trim((string)($ev['department'] ?? ''));
                       $locLabel = trim((string)($ev['location'] ?? ''));
+                      $evStPast = strtolower((string)($ev['status'] ?? ''));
+                      $isEndedPastCard = ($evStPast === 'closed' || $evStPast === 'completed');
                     ?>
-                    <a class="public-upcoming-card login-trigger" href="javascript:void(0)" data-login-url="<?= htmlspecialchars($login_src) ?>" aria-label="Log in to view <?= htmlspecialchars((string)($ev['title'] ?? 'event')) ?>">
+                    <a class="public-upcoming-card login-trigger<?= $isEndedPastCard ? ' public-upcoming-card-ended' : '' ?>" href="javascript:void(0)" data-login-url="<?= htmlspecialchars($login_src) ?>" aria-label="Log in to view <?= htmlspecialchars((string)($ev['title'] ?? 'event')) ?>">
                         <div class="public-upcoming-card-top">
                             <div class="public-upcoming-card-title"><?= htmlspecialchars((string)($ev['title'] ?? 'Untitled')) ?></div>
                             <div class="public-upcoming-card-meta">
@@ -260,6 +405,7 @@ if ($checkin_token !== '') {
                             </div>
                         </div>
                         <div class="public-upcoming-card-bottom">
+                            <?php if ($isEndedPastCard): ?><span class="chip chip-ended">Ended</span><?php endif; ?>
                             <?php if ($deptLabel !== ''): ?><span class="chip"><?= htmlspecialchars($deptLabel) ?></span><?php endif; ?>
                             <?php if ($locLabel !== ''): ?><span class="chip chip-muted"><?= htmlspecialchars($locLabel) ?></span><?php endif; ?>
                             <span class="chip chip-cta">Log in to view</span>
@@ -279,7 +425,7 @@ if ($checkin_token !== '') {
         <?php endif; ?>
     </div>
 
-    <div class="public-calendar-card">
+    <div class="public-calendar-card reveal-item" style="--reveal-d: 240ms">
         <div class="public-calendar-toolbar">
             <div class="public-calendar-note">
                 <span class="pill">Public view</span>
@@ -300,20 +446,23 @@ if ($checkin_token !== '') {
     </script>
 </section>
 
-<section id="hero">
+<section id="hero" class="reveal-scope">
     <?php if ($checkin_token !== ''): ?>
-    <p class="hero-checkin-notice" style="background: rgba(102, 126, 234, 0.2); color: #c7d2fe; padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 1rem; font-size: 0.95rem;">
+    <p class="hero-checkin-notice reveal-item" style="--reveal-d: 0ms; background: rgba(5, 150, 105, 0.22); color: #ecfdf5; border: 1px solid rgba(253, 224, 71, 0.35); padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 1rem; font-size: 0.95rem;">
         <strong>Event check-in.</strong> Log in with your student account to confirm your attendance.
     </p>
     <?php endif; ?>
-    <h1>Plan and track every school event in one place.</h1>
-    <p>
+    <h1 class="reveal-item" style="--reveal-d: 0ms">Plan and track every school event in one place.</h1>
+    <p class="hero-lead reveal-item" style="--reveal-d: 60ms">One calendar for admins, organizers, and students—stay aligned without the spreadsheet chaos.</p>
+    <p class="reveal-item" style="--reveal-d: 110ms">
         EVENTIFY is a web & app-based school events monitoring system that helps
         administrators, organizers, and students create, announce, and follow every
         activity without missing a thing.
     </p>
-    <div class="hero-buttons">
-        <a class="btn login-trigger" href="javascript:void(0)" id="heroGetStarted" data-login-url="<?= htmlspecialchars($login_src) ?>"><?= $checkin_token !== '' ? 'Log in to check in' : 'Get Started' ?></a>
+    <div class="hero-buttons reveal-item" style="--reveal-d: 170ms">
+        <span class="magnetic-wrap">
+            <a class="btn btn-shimmer login-trigger" href="javascript:void(0)" id="heroGetStarted" data-login-url="<?= htmlspecialchars($login_src) ?>"><?= $checkin_token !== '' ? 'Log in to check in' : 'Get Started' ?></a>
+        </span>
         <a class="btn btn-outline" onclick="goToSection('how-it-works')">See how it works</a>
     </div>
 </section>
@@ -386,6 +535,9 @@ if ($checkin_token !== '') {
                             <i class="fas fa-eye" aria-hidden="true"></i>
                         </button>
                     </div>
+                    <div class="auth-password-guide" id="registerPasswordGuide">
+                        Password guide: at least 8 characters, with 1 uppercase letter and 1 special character.
+                    </div>
                 </div>
                 <div class="auth-input-wrap auth-password-wrap">
                     <label class="auth-label" for="registerModalConfirmPassword">Confirm Password</label>
@@ -395,6 +547,7 @@ if ($checkin_token !== '') {
                             <i class="fas fa-eye" aria-hidden="true"></i>
                         </button>
                     </div>
+                    <div class="auth-password-match" id="registerPasswordMatchStatus" style="display:none;"></div>
                 </div>
                 <div class="auth-input-wrap">
                     <label class="auth-label" for="registerRoleSelectModal">Role</label>
@@ -419,11 +572,79 @@ if ($checkin_token !== '') {
                         <option value="College of Hospitality Management">College of Hospitality Management</option>
                     </select>
                 </div>
+                <div class="auth-input-wrap" id="registerCourseWrapModal" style="display:none;">
+                    <label class="auth-label" for="registerCourseSelectModal">Course / Program</label>
+                    <select name="student_course" id="registerCourseSelectModal" class="auth-input">
+                        <?php if (!empty($studentCourseOptions)): ?>
+                            <?php foreach ($studentCourseOptions as $cv => $clab): ?>
+                                <?php $courseDept = function_exists('eventify_student_course_program_department') ? eventify_student_course_program_department((string)$cv) : ''; ?>
+                                <option value="<?= htmlspecialchars((string)$cv) ?>"<?= $courseDept !== '' ? ' data-department="' . htmlspecialchars($courseDept) . '"' : '' ?>><?= htmlspecialchars((string)$clab) ?></option>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <option value="">Select course / program</option>
+                        <?php endif; ?>
+                    </select>
+                </div>
+                <div class="auth-input-wrap" id="registerYearLevelWrapModal" style="display:none;">
+                    <label class="auth-label" for="registerYearLevelSelectModal">Year Level</label>
+                    <select name="student_year_level" id="registerYearLevelSelectModal" class="auth-input">
+                        <?php if (!empty($studentYearLevelOptions)): ?>
+                            <?php foreach ($studentYearLevelOptions as $yv => $ylab): ?>
+                                <option value="<?= htmlspecialchars((string)$yv) ?>"><?= htmlspecialchars((string)$ylab) ?></option>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <option value="">— Select —</option>
+                        <?php endif; ?>
+                    </select>
+                </div>
+                <div class="auth-input-wrap auth-consent-wrap">
+                    <label class="auth-consent-check">
+                        <input type="checkbox" name="accept_legal" value="1" required>
+                        <span>
+                            I have read and agree to the
+                            <button type="button" class="legal-doc-link" data-legal-open="privacy" onclick="openLegalPrivacyModal(); return false;">Data Privacy Notice</button>
+                            and
+                            <button type="button" class="legal-doc-link" data-legal-open="terms" onclick="openLegalTermsModal(); return false;">Terms and Conditions</button>.
+                        </span>
+                    </label>
+                </div>
                 <button type="submit" class="login-modal-action-btn primary auth-submit-btn">Register</button>
             </form>
         </div>
         <div class="login-modal-action-row">
             <button type="button" class="login-modal-action-btn primary" onclick="openLoginModal()">Back to Login</button>
+        </div>
+    </div>
+</div>
+
+<!-- Legal documents (stacked above auth modals; no redirect from registration) -->
+<div id="legalPrivacyModal" class="modal auth-modal legal-doc-modal" style="display:none;" aria-hidden="true">
+    <div class="modal-content auth-modal-content legal-doc-panel">
+        <span class="close" onclick="closeLegalPrivacyModal()" aria-label="Close">&times;</span>
+        <div class="legal-doc-panel-head">
+            <h3 class="auth-title">EVENTIFY Data Privacy Notice</h3>
+            <p class="auth-subtitle legal-doc-sub">Republic Act No. 10173 (Data Privacy Act of 2012)</p>
+        </div>
+        <div class="legal-doc-scroll legal-doc-body">
+            <?php include __DIR__ . '/views/partials/legal_privacy_inner.php'; ?>
+        </div>
+        <div class="legal-doc-actions">
+            <button type="button" class="login-modal-action-btn primary" onclick="closeLegalPrivacyModal()">Close</button>
+        </div>
+    </div>
+</div>
+<div id="legalTermsModal" class="modal auth-modal legal-doc-modal" style="display:none;" aria-hidden="true">
+    <div class="modal-content auth-modal-content legal-doc-panel">
+        <span class="close" onclick="closeLegalTermsModal()" aria-label="Close">&times;</span>
+        <div class="legal-doc-panel-head">
+            <h3 class="auth-title">Terms and Conditions</h3>
+            <p class="auth-subtitle legal-doc-sub">EVENTIFY - School Events Monitoring System</p>
+        </div>
+        <div class="legal-doc-scroll legal-doc-body">
+            <?php $legal_terms_context = 'modal'; include __DIR__ . '/views/partials/legal_terms_inner.php'; ?>
+        </div>
+        <div class="legal-doc-actions">
+            <button type="button" class="login-modal-action-btn primary" onclick="closeLegalTermsModal()">Close</button>
         </div>
     </div>
 </div>
@@ -455,19 +676,19 @@ if ($checkin_token !== '') {
     </div>
 </div>
 
-<section id="how-it-works">
-    <h1>How EVENTIFY works</h1>
-    <div class="grid">
+<section id="how-it-works" class="reveal-scope">
+    <h1 class="reveal-item" style="--reveal-d: 0ms">How EVENTIFY works</h1>
+    <div class="grid reveal-item" style="--reveal-d: 80ms">
         <div class="card">
             <h3 style="margin-bottom: 8px; font-size: 1.2rem;">1. Plan</h3>
-            <p style="font-size: 0.95rem; color: #cbd5e1;">
+            <p style="font-size: 0.95rem; color: var(--school-muted);">
                 Organizers create events, choose which departments can see them, and set dates
                 and locations in a few clicks.
             </p>
         </div>
         <div class="card">
             <h3 style="margin-bottom: 8px; font-size: 1.2rem;">2. Announce & track</h3>
-            <p style="font-size: 0.95rem; color: #cbd5e1;">
+            <p style="font-size: 0.95rem; color: var(--school-muted);">
                 Students see upcoming events on a Google-style calendar filtered to their
                 department, while admins and organizers review and update events in one
                 centralized place.
@@ -476,33 +697,33 @@ if ($checkin_token !== '') {
     </div>
 </section>
 
-<section id="features">
-    <h1>Powerful features for your campus</h1>
-    <div class="grid">
+<section id="features" class="reveal-scope">
+    <h1 class="reveal-item" style="--reveal-d: 0ms">Powerful features for your campus</h1>
+    <div class="grid reveal-item" style="--reveal-d: 80ms">
         <div class="card">
             <h3 style="margin-bottom: 10px; font-size: 1.3rem;">📅 Smart event creation</h3>
-            <p style="font-size: 0.95rem; color: #cbd5e1;">
+            <p style="font-size: 0.95rem; color: var(--school-muted);">
                 Create events in a few clicks, set dates and locations, and target the right
                 departments or the whole school.
             </p>
         </div>
         <div class="card">
             <h3 style="margin-bottom: 10px; font-size: 1.3rem;">🗓 Google-style calendars</h3>
-            <p style="font-size: 0.95rem; color: #cbd5e1;">
+            <p style="font-size: 0.95rem; color: var(--school-muted);">
                 Organizer and student dashboards use a clean month/week/day calendar view so
                 everyone can see what is happening at a glance.
             </p>
         </div>
         <div class="card">
             <h3 style="margin-bottom: 10px; font-size: 1.3rem;">🎯 Department-based visibility</h3>
-            <p style="font-size: 0.95rem; color: #cbd5e1;">
+            <p style="font-size: 0.95rem; color: var(--school-muted);">
                 Events can be exclusive to BSIT, BSHM, CONAHS, Senior High, or visible to all —
                 students only see what is relevant to them.
             </p>
         </div>
         <div class="card">
             <h3 style="margin-bottom: 10px; font-size: 1.3rem;">👤 Personalized dashboards</h3>
-            <p style="font-size: 0.95rem; color: #cbd5e1;">
+            <p style="font-size: 0.95rem; color: var(--school-muted);">
                 Students can update their profile and view events in one place, while organizers
                 manage and edit their events easily.
             </p>
@@ -510,26 +731,33 @@ if ($checkin_token !== '') {
     </div>
 </section>
 
-<section id="roles">
-    <h1>Built for your whole school</h1>
-    <div class="grid">
+<section id="roles" class="reveal-scope">
+    <h1 class="reveal-item" style="--reveal-d: 0ms">Built for your whole school</h1>
+    <div class="grid reveal-item" style="--reveal-d: 80ms">
         <div class="card">
             <h3 style="margin-bottom: 10px; font-size: 1.3rem;">👨‍💼 Administrators</h3>
-            <p style="font-size: 0.95rem; color: #cbd5e1;">
+            <p style="font-size: 0.95rem; color: var(--school-muted);">
                 Get a clear view of all upcoming events, departments involved, and organizers
                 responsible for each activity.
             </p>
         </div>
         <div class="card">
             <h3 style="margin-bottom: 10px; font-size: 1.3rem;">🎯 Organizers</h3>
-            <p style="font-size: 0.95rem; color: #cbd5e1;">
+            <p style="font-size: 0.95rem; color: var(--school-muted);">
                 Create, edit, and manage events from a modern Google-like calendar, and see
                 exactly which students you are targeting.
             </p>
         </div>
         <div class="card">
+            <h3 style="margin-bottom: 10px; font-size: 1.3rem;">📷 Multimedia</h3>
+            <p style="font-size: 0.95rem; color: var(--school-muted);">
+                Capture and manage photos and visuals for school events so announcements and
+                galleries stay complete and easy to find.
+            </p>
+        </div>
+        <div class="card">
             <h3 style="margin-bottom: 10px; font-size: 1.3rem;">🎓 Students</h3>
-            <p style="font-size: 0.95rem; color: #cbd5e1;">
+            <p style="font-size: 0.95rem; color: var(--school-muted);">
                 View upcoming events for your department, avoid schedule conflicts, and keep
                 track of your participation throughout the school year.
             </p>
@@ -537,22 +765,26 @@ if ($checkin_token !== '') {
     </div>
 </section>
 
-<section id="faq">
-    <h1>Frequently asked questions</h1>
-    <div class="grid">
-        <div class="card" style="text-align:left;">
-            <h3 style="margin-bottom: 6px; font-size: 1.1rem;">Who can create events?</h3>
-            <p style="font-size: 0.95rem; color: #cbd5e1;">
-                Only users with an organizer or admin account can create and manage events from
-                their dashboard.
-            </p>
+<section id="faq" class="reveal-scope">
+    <h1 class="reveal-item" style="--reveal-d: 0ms">Frequently asked questions</h1>
+    <div class="faq-accordion reveal-item" style="--reveal-d: 80ms">
+        <div class="faq-item is-open">
+            <button type="button" class="faq-trigger" id="faqTrigger1" aria-expanded="true" aria-controls="faqPanel1">
+                <span>Who can create events?</span>
+                <i class="fas fa-chevron-down faq-trigger-icon" aria-hidden="true"></i>
+            </button>
+            <div class="faq-panel" id="faqPanel1" role="region" aria-labelledby="faqTrigger1">
+                <p>Only users with an organizer or admin account can create and manage events from their dashboard.</p>
+            </div>
         </div>
-        <div class="card" style="text-align:left;">
-            <h3 style="margin-bottom: 6px; font-size: 1.1rem;">What do students see?</h3>
-            <p style="font-size: 0.95rem; color: #cbd5e1;">
-                Students see events that are tagged for their department or for all departments,
-                displayed in a clean calendar view.
-            </p>
+        <div class="faq-item">
+            <button type="button" class="faq-trigger" id="faqTrigger2" aria-expanded="false" aria-controls="faqPanel2">
+                <span>What do students see?</span>
+                <i class="fas fa-chevron-down faq-trigger-icon" aria-hidden="true"></i>
+            </button>
+            <div class="faq-panel" id="faqPanel2" role="region" aria-labelledby="faqTrigger2">
+                <p>Students see events that are tagged for their department or for all departments, displayed in a clean calendar view.</p>
+            </div>
         </div>
     </div>
 </section>
@@ -572,6 +804,8 @@ if ($checkin_token !== '') {
         <div class="footer-links">
             <a href="javascript:void(0)" onclick="goToSection('features')">Features</a>
             <a href="javascript:void(0)" onclick="goToSection('roles')">Roles</a>
+            <a class="legal-doc-link legal-footer-link" href="<?= BASE_URL ?>/privacy-notice.php" target="_blank" rel="noopener noreferrer">Privacy Notice</a>
+            <a class="legal-doc-link legal-footer-link" href="<?= BASE_URL ?>/terms-and-conditions.php" target="_blank" rel="noopener noreferrer">Terms &amp; Conditions</a>
             <a href="mailto:youremail@example.com">Contact</a>
         </div>
     </div>
@@ -580,6 +814,6 @@ if ($checkin_token !== '') {
 
 <!-- JS -->
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
-<script src="/school_events/assets/js/index.js"></script>
+<script src="<?= BASE_URL ?>/assets/js/index.js"></script>
 </body>
 </html>

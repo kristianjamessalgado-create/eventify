@@ -109,7 +109,7 @@ body, html {
 
 /* Menu button for mobile sidebar - hidden on desktop */
 .sidebar-toggle-mobile {
-    display: none;
+    display: flex;
 }
 
 .brand-logo {
@@ -793,14 +793,14 @@ body, html {
     color: #ffffff !important;
 }
 
-/* Default event color */
+/* Default event color (forest; state attrs override in theme block) */
 .fc-event {
-    background-color: #10b981 !important;
+    background-color: #013220 !important;
     color: #ffffff !important;
 }
 
 .fc-more-link {
-    color: #10b981 !important;
+    color: #013220 !important;
     font-size: 12px !important;
     font-weight: 600 !important;
     padding: 4px 8px !important;
@@ -808,7 +808,7 @@ body, html {
 }
 
 .fc-more-link:hover {
-    background: #f0fdf4 !important;
+    background: rgba(249, 237, 0, 0.35) !important;
 }
 
 /* ===============================
@@ -1272,6 +1272,41 @@ body, html {
     }
 }
 
+@media (min-width: 769px) {
+    .dashboard-layout {
+        overflow: hidden;
+    }
+
+    .sidebar {
+        position: sticky;
+        top: 64px;
+        height: calc(100vh - 64px);
+        will-change: width, padding, opacity;
+        transition: width 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+                    padding-left 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+                    padding-right 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+                    opacity 0.22s ease,
+                    border-color 0.22s ease,
+                    box-shadow 0.22s ease;
+    }
+
+    body.student-sidebar-collapsed .sidebar {
+        width: 0;
+        min-width: 0;
+        padding-left: 0;
+        padding-right: 0;
+        border-right-color: transparent;
+        box-shadow: none;
+        opacity: 0;
+        overflow: hidden;
+        pointer-events: none;
+    }
+
+    body.student-sidebar-collapsed .main-content {
+        border-left: 0;
+    }
+}
+
 /* Profile Picture Full-Screen Viewer */
 .profile-pic-fullscreen {
     position: fixed;
@@ -1326,4 +1361,389 @@ body, html {
     object-fit: contain;
     border-radius: 8px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+/* ===============================
+   STUDENT DASHBOARD THEME OVERRIDE
+   WLC-style: olive → deep forest gradient, poster gold, white on dark
+================================ */
+:root {
+    --school-white: #ffffff;
+    --school-cream: #fafdf8;
+    --school-olive-top: #7a8d3b;
+    --school-forest-mid: #164a1a;
+    --school-forest-deep: #032802;
+    --school-forest-card: #013220;
+    --school-gold: #f9ed00;
+    --school-gold-dim: #d4c400;
+    --school-green-bright: #15803d;
+    --school-border: rgba(249, 237, 0, 0.35);
+    --school-soft-bg: rgba(1, 50, 32, 0.22);
+    --school-text-on-dark: #ffffff;
+    --school-text-muted: rgba(255, 255, 255, 0.78);
+}
+
+body, html {
+    background: linear-gradient(180deg, var(--school-olive-top) 0%, var(--school-forest-mid) 42%, var(--school-forest-deep) 100%);
+    background-attachment: fixed;
+    min-height: 100%;
+}
+
+.top-navbar {
+    background: linear-gradient(180deg, var(--school-forest-card) 0%, #021a08 100%);
+    border-bottom: 3px solid var(--school-gold);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+}
+
+.brand-logo {
+    color: var(--school-text-on-dark);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.brand-logo i {
+    color: var(--school-gold);
+}
+
+.nav-btn {
+    color: var(--school-text-muted);
+}
+
+.nav-btn:hover {
+    background: rgba(249, 237, 0, 0.18);
+    color: var(--school-gold);
+}
+
+.profile-avatar {
+    background: linear-gradient(135deg, var(--school-green-bright) 0%, #0d4d24 100%);
+    border: 2px solid rgba(249, 237, 0, 0.45);
+}
+
+.user-info-card {
+    background: linear-gradient(135deg, #0a3d1f 0%, var(--school-forest-card) 55%, #021a08 100%);
+    border: 2px solid var(--school-gold);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
+}
+
+.event-date-badge {
+    background: linear-gradient(180deg, var(--school-gold) 0%, var(--school-gold-dim) 100%);
+    color: var(--school-forest-card);
+    border: 1px solid rgba(1, 50, 32, 0.25);
+}
+
+.sidebar {
+    background: linear-gradient(180deg, rgba(1, 50, 32, 0.94) 0%, rgba(3, 40, 2, 0.97) 100%);
+    border-right: 2px solid var(--school-border);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.sidebar .section-title {
+    color: var(--school-gold);
+    letter-spacing: 0.12em;
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
+}
+
+.sidebar .mini-cal-month {
+    color: var(--school-text-on-dark);
+}
+
+.sidebar .mini-cal-day {
+    color: var(--school-text-muted);
+}
+
+.sidebar .mini-cal-day-header {
+    color: rgba(249, 237, 0, 0.75);
+}
+
+.sidebar .mini-cal-day:hover {
+    background: rgba(249, 237, 0, 0.12);
+}
+
+.sidebar .mini-cal-day.today {
+    background: var(--school-gold);
+    color: var(--school-forest-card);
+}
+
+.main-content,
+.calendar-container,
+.student-calendar-legend,
+.event-item,
+.profile-modal-content,
+.modal-content {
+    background: var(--school-cream);
+}
+
+.mini-calendar-widget {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--school-border);
+}
+
+.action-btn {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(249, 237, 0, 0.28);
+    color: var(--school-text-on-dark);
+}
+
+.action-btn:hover {
+    background: rgba(249, 237, 0, 0.16);
+    border-color: var(--school-gold);
+    color: var(--school-gold);
+}
+
+.action-btn i {
+    color: var(--school-gold);
+}
+
+.action-btn.logout-btn {
+    color: #fecaca;
+    border-color: rgba(248, 113, 113, 0.45);
+}
+
+.action-btn.logout-btn:hover {
+    background: rgba(127, 29, 29, 0.35);
+    border-color: #f87171;
+}
+
+.department-badge-large {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--school-border);
+}
+
+.department-badge-large span {
+    color: var(--school-text-on-dark);
+}
+
+.dept-note {
+    color: var(--school-text-muted);
+}
+
+.profile-menu,
+.form-group input,
+.form-group select,
+.form-control-file {
+    border-color: rgba(1, 50, 32, 0.2);
+}
+
+.calendar-controls {
+    background: var(--school-gold) !important;
+    border: 2px solid rgba(1, 50, 32, 0.2) !important;
+    border-radius: 0;
+}
+
+.calendar-title {
+    color: var(--school-forest-card) !important;
+    font-weight: 800;
+}
+
+.control-nav,
+.view-btn {
+    background: rgba(255, 255, 255, 0.55);
+    border-color: var(--school-forest-card) !important;
+    color: var(--school-forest-card);
+}
+
+.control-nav:hover,
+.view-btn:hover {
+    background: #ffffff;
+    border-color: var(--school-forest-deep) !important;
+}
+
+.view-btn.active {
+    background: var(--school-forest-card) !important;
+    border-color: var(--school-forest-card) !important;
+    color: var(--school-gold) !important;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+.upcoming-events-section,
+.fc-day-other .fc-daygrid-day-frame {
+    background: var(--school-soft-bg) !important;
+}
+
+.upcoming-events-section {
+    border-top: 2px solid var(--school-border);
+}
+
+.section-heading {
+    color: var(--school-forest-card);
+    border-left: 4px solid var(--school-gold);
+    padding-left: 0.65rem;
+}
+
+.btn-primary {
+    background: linear-gradient(180deg, var(--school-forest-card) 0%, var(--school-forest-deep) 100%);
+    border: 2px solid var(--school-gold);
+    color: var(--school-gold);
+}
+
+.btn-primary:hover {
+    background: var(--school-forest-deep);
+    color: var(--school-gold);
+    border-color: #fff7a8;
+}
+
+.fc-day-today {
+    background-color: rgba(249, 237, 0, 0.35) !important;
+}
+
+.fc-day-today .fc-daygrid-day-number {
+    color: var(--school-forest-card) !important;
+    font-weight: 800 !important;
+}
+
+.fc-event[data-event-state="active"] {
+    background-color: var(--school-forest-card) !important;
+    color: var(--school-white) !important;
+    border: 1px solid rgba(249, 237, 0, 0.35) !important;
+}
+
+.fc-event[data-event-state="upcoming"] {
+    background-color: var(--school-gold) !important;
+    color: var(--school-forest-card) !important;
+}
+
+.fc-event[data-event-state="closed"] {
+    background-color: #4b5563 !important;
+}
+
+.fc-more-link {
+    color: var(--school-forest-card) !important;
+    font-weight: 700 !important;
+}
+
+.fc-more-link:hover {
+    background: rgba(249, 237, 0, 0.35) !important;
+}
+
+/* ===============================
+   SECOND DESIGN PASS
+   Poster polish (gold bars, forest panels)
+================================ */
+.brand-logo {
+    font-weight: 800;
+    letter-spacing: 0.06em;
+}
+
+.main-content {
+    background: linear-gradient(180deg, #ffffff 0%, var(--school-cream) 100%);
+    transition: border-left-color 0.24s ease;
+    border-left: 2px solid var(--school-border);
+    box-shadow: -6px 0 32px rgba(0, 0, 0, 0.2);
+}
+
+.user-dept-badge {
+    border: 1px solid rgba(255, 255, 255, 0.55);
+}
+
+.mini-calendar-widget,
+.student-calendar-legend,
+.event-item,
+.action-btn,
+.department-badge-large,
+.upcoming-events-section {
+    border-radius: 14px;
+}
+
+.mini-calendar-widget {
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+}
+
+.mini-cal-day.selected {
+    background: rgba(249, 237, 0, 0.25);
+    color: var(--school-gold);
+    font-weight: 700;
+    outline: 1px solid var(--school-gold);
+}
+
+.action-btn {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.action-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 18px rgba(0, 0, 0, 0.25);
+}
+
+.calendar-controls {
+    margin: 16px 16px 0;
+    border-radius: 0 !important;
+}
+
+.student-calendar-legend {
+    background: rgba(1, 50, 32, 0.08) !important;
+    border: 2px solid var(--school-border) !important;
+    color: var(--school-forest-card) !important;
+    font-weight: 600;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.calendar-container {
+    padding-top: 16px;
+}
+
+#student-calendar {
+    border: 2px solid rgba(1, 50, 32, 0.25);
+    border-radius: 0;
+    padding: 10px;
+    background: #ffffff !important;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+}
+
+.fc-col-header-cell {
+    background: var(--school-gold) !important;
+    border-bottom: 2px solid var(--school-forest-card) !important;
+}
+
+.fc-col-header-cell-cushion {
+    color: var(--school-forest-card) !important;
+    font-weight: 800 !important;
+}
+
+.fc-daygrid-day:hover {
+    background: rgba(249, 237, 0, 0.12) !important;
+    box-shadow: inset 0 0 0 1px rgba(249, 237, 0, 0.45);
+}
+
+.fc-event {
+    border-radius: 9px !important;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.16) !important;
+}
+
+.event-item {
+    border: 2px solid rgba(1, 50, 32, 0.18);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+}
+
+.event-item:hover {
+    box-shadow: 0 14px 28px rgba(0, 0, 0, 0.12);
+    border-color: rgba(249, 237, 0, 0.65);
+}
+
+.event-title {
+    color: var(--school-forest-card);
+}
+
+.event-meta,
+.event-desc {
+    color: #4b5563;
+}
+
+.event-date-badge {
+    border: 2px solid var(--school-forest-card);
+}
+
+.profile-menu .dropdown-item:active,
+.profile-menu .dropdown-item:focus {
+    background: rgba(249, 237, 0, 0.35);
+    color: var(--school-forest-card);
+}
+
+@media (max-width: 768px) {
+    .calendar-controls {
+        margin: 12px 12px 0;
+    }
+
+    #student-calendar {
+        border-radius: 12px;
+        padding: 8px;
+    }
 }

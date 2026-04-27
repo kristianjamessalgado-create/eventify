@@ -29,7 +29,7 @@ if (!$checkCol || $checkCol->num_rows < 1) {
     exit();
 }
 
-$stmt = $conn->prepare("UPDATE event_photos SET status = 'published', published_at = NOW() WHERE event_id = ? AND uploaded_by = ? AND status <> 'published'");
+$stmt = $conn->prepare("UPDATE event_photos SET status = 'published', published_at = NOW() WHERE event_id = ? AND uploaded_by = ? AND status = 'draft'");
 $stmt->bind_param("ii", $event_id, $user_id);
 $stmt->execute();
 $updated = $stmt->affected_rows;

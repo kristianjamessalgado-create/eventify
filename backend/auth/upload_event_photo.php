@@ -110,10 +110,23 @@ if (!is_dir($uploads_base)) {
     }
 }
 
-$insert = $conn->prepare("INSERT INTO event_photos (event_id, uploaded_by, file_path, status, published_at) VALUES (?, ?, ?, 'draft', NULL)");
-if (!$insert) {
-    // Backward compatibility if status/published_at columns are not migrated yet
+// mysqli can throw on invalid SQL; check columns before prepare (same pattern as dashboard_multimedia.php).
+$photoStatusEnabled = false;
+try {
+    $chkCol = $conn->query("SHOW COLUMNS FROM event_photos LIKE 'status'");
+    $photoStatusEnabled = (bool) ($chkCol && $chkCol->num_rows > 0);
+} catch (Throwable $e) {
+    $photoStatusEnabled = false;
+}
+
+if ($photoStatusEnabled) {
+    $insert = $conn->prepare("INSERT INTO event_photos (event_id, uploaded_by, file_path, status, published_at) VALUES (?, ?, ?, 'draft', NULL)");
+} else {
     $insert = $conn->prepare("INSERT INTO event_photos (event_id, uploaded_by, file_path) VALUES (?, ?, ?)");
+}
+if (!$insert) {
+    header("Location: " . BASE_URL . "/backend/auth/dashboard_multimedia.php?msg=" . urlencode("Database error: could not save photo record."));
+    exit();
 }
 $uploaded = 0;
 

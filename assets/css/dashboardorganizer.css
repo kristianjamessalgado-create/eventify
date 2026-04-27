@@ -54,6 +54,29 @@
     border-radius: 14px;
     border: 1px solid #e2e8f0;
 }
+
+/* Mark-ended / withdraw confirm: stack above other modals & keep footer buttons above body */
+#organizerEventStatusConfirmModal.modal {
+    z-index: 2000 !important;
+}
+#organizerEventStatusConfirmModal .modal-content {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    max-height: min(90vh, 520px);
+}
+#organizerEventStatusConfirmModal .modal-body {
+    overflow-y: auto;
+    flex: 1 1 auto;
+}
+#organizerEventStatusConfirmModal .modal-footer {
+    flex-shrink: 0;
+    position: relative;
+    z-index: 2;
+    background: #fff;
+    border-top: 1px solid #e2e8f0;
+    box-shadow: 0 -6px 16px rgba(15, 23, 42, 0.06);
+}
 /* ===============================
    RESET & BASE
 ================================ */
@@ -130,6 +153,10 @@ body, html {
     color: #94a3b8;
     transition: all 0.2s ease;
     text-decoration: none;
+}
+
+.sidebar-toggle-mobile {
+    display: inline-flex;
 }
 
 .nav-btn:hover {
@@ -267,6 +294,10 @@ body, html {
     display: flex;
     flex-direction: column;
     gap: 32px;
+}
+
+.sidebar-close-mobile {
+    display: none;
 }
 
 /* Mini Calendar Widget */
@@ -855,16 +886,52 @@ body, html {
 }
 
 @media (max-width: 768px) {
-    .dashboard-layout {
-        flex-direction: column;
+    .sidebar-backdrop {
+        position: fixed;
+        inset: 64px 0 0 0;
+        background: rgba(2, 6, 23, 0.45);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.22s ease;
+        z-index: 990;
     }
 
-    .sidebar {
-        width: 100%;
-        height: auto;
-        max-height: 300px;
-        border-right: none;
-        border-bottom: 1px solid #e5e7eb;
+    #organizerSidebar {
+        position: fixed !important;
+        top: 64px !important;
+        left: 0 !important;
+        bottom: 0 !important;
+        transform: translateX(-100%);
+        width: min(88vw, 320px) !important;
+        max-width: 320px !important;
+        height: auto !important;
+        z-index: 1001 !important;
+        transition: transform 0.22s ease;
+        padding-top: 52px !important;
+    }
+
+    body.organizer-sidebar-open #organizerSidebar {
+        transform: translateX(0);
+    }
+
+    body.organizer-sidebar-open .sidebar-backdrop {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    .sidebar-close-mobile {
+        display: inline-flex !important;
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        width: 34px;
+        height: 34px;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        border-radius: 8px;
+        background: rgba(2, 6, 23, 0.25);
+        color: #f8fafc;
     }
 
     .calendar-controls {
@@ -902,6 +969,36 @@ body, html {
     }
 }
 
+@media (min-width: 769px) {
+    #organizerSidebar {
+        position: sticky;
+        top: 64px;
+        height: calc(100vh - 64px);
+        transition: width 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+                    padding-left 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+                    padding-right 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+                    opacity 0.22s ease,
+                    border-color 0.22s ease,
+                    box-shadow 0.22s ease;
+    }
+
+    body.organizer-sidebar-collapsed #organizerSidebar {
+        width: 0 !important;
+        min-width: 0 !important;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+        border-right-color: transparent !important;
+        box-shadow: none !important;
+        opacity: 0;
+        overflow: hidden;
+        pointer-events: none;
+    }
+
+    body.organizer-sidebar-collapsed .main-content {
+        border-left: 0 !important;
+    }
+}
+
 /* Create-event modal: Leaflet map */
 .event-location-map {
     height: 260px;
@@ -915,6 +1012,19 @@ body, html {
     max-height: 160px;
     overflow-y: auto;
     z-index: 2;
+}
+
+/* Create event modal: scroll long form + slightly shorter map */
+#createEventModal .modal-body {
+    max-height: min(78vh, 720px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+}
+
+#createEventModal .event-location-map {
+    height: 200px;
+    min-height: 160px;
 }
 
 /* Organizer settings modal */
@@ -943,4 +1053,194 @@ body, html {
     font-weight: 700;
     color: #0f172a;
     font-size: 0.95rem;
+}
+
+/* ===============================
+   SCHOOL THEME REFRESH (OVERRIDES)
+================================ */
+:root {
+    --org-school-green-900: #064e3b;
+    --org-school-green-800: #065f46;
+    --org-school-green-700: #047857;
+    --org-school-green-100: #d1fae5;
+    --org-school-gold-600: #ca8a04;
+    --org-school-gold-500: #d4a016;
+    --org-school-gold-100: #fef3c7;
+    --org-ink-900: #0f172a;
+    --org-ink-700: #334155;
+    --org-ink-500: #64748b;
+    --org-surface: #ffffff;
+    --org-surface-soft: #f8faf7;
+    --org-border: #dbe7df;
+}
+
+body,
+html {
+    background:
+        radial-gradient(900px 420px at -8% -10%, rgba(6, 95, 70, 0.18), transparent 62%),
+        radial-gradient(950px 380px at 108% -5%, rgba(202, 138, 4, 0.13), transparent 64%),
+        #f3f8f5;
+    color: var(--org-ink-900);
+}
+
+.top-navbar {
+    background: linear-gradient(90deg, rgba(6, 78, 59, 0.97), rgba(6, 95, 70, 0.95));
+    border-bottom: 1px solid rgba(212, 160, 22, 0.45);
+    box-shadow: 0 10px 25px rgba(2, 44, 34, 0.28);
+}
+
+.brand-logo,
+.brand-logo span {
+    color: #f8fafc;
+    letter-spacing: 0.02em;
+}
+
+.brand-logo i {
+    color: #facc15;
+}
+
+.nav-btn {
+    color: #d1fae5;
+    border: 1px solid transparent;
+}
+
+.nav-btn:hover {
+    background: rgba(250, 204, 21, 0.18);
+    border-color: rgba(250, 204, 21, 0.32);
+    color: #fef9c3;
+}
+
+.create-btn {
+    background: linear-gradient(135deg, var(--org-school-gold-500), var(--org-school-gold-600)) !important;
+    color: #1f2937 !important;
+}
+
+.create-btn:hover {
+    background: linear-gradient(135deg, #eab308, #b45309) !important;
+    color: #111827 !important;
+}
+
+.sidebar {
+    background: linear-gradient(180deg, #ffffff, #f7fbf8);
+    border-right: 1px solid var(--org-border);
+    box-shadow: 8px 0 24px rgba(6, 78, 59, 0.08);
+}
+
+.mini-calendar-widget,
+.action-btn,
+.calendars-search input {
+    border-color: var(--org-border);
+}
+
+.mini-calendar-widget {
+    background: var(--org-surface);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 5px 16px rgba(15, 23, 42, 0.04);
+}
+
+.mini-cal-month,
+.calendar-name,
+.calendar-title {
+    color: var(--org-ink-900);
+}
+
+.mini-cal-day.today {
+    background: var(--org-school-green-700);
+}
+
+.mini-cal-day.selected {
+    background: rgba(6, 95, 70, 0.14);
+    color: var(--org-school-green-800);
+    outline-color: rgba(6, 95, 70, 0.45);
+}
+
+.calendars-search input:focus {
+    border-color: var(--org-school-green-700);
+    box-shadow: 0 0 0 3px rgba(6, 95, 70, 0.12);
+}
+
+.calendar-item.active {
+    background: linear-gradient(135deg, var(--org-school-green-800), var(--org-school-green-700));
+}
+
+.section-title,
+.calendars-title {
+    color: var(--org-ink-500);
+}
+
+.action-btn {
+    background: #ffffff;
+    color: var(--org-ink-900);
+}
+
+.action-btn:hover {
+    background: #f0fdf4;
+    border-color: #b7dcc6;
+}
+
+.main-content {
+    background: var(--org-surface);
+    border-left: 1px solid var(--org-border);
+    box-shadow: -4px 0 18px rgba(6, 78, 59, 0.06);
+}
+
+.calendar-controls {
+    background: linear-gradient(180deg, #f8fdf9, #f3faf5);
+    border-bottom: 1px solid var(--org-border);
+}
+
+.control-nav,
+.view-btn {
+    border-color: #cfe0d7;
+    background: #ffffff;
+    color: var(--org-ink-700);
+}
+
+.control-nav:hover,
+.view-btn:hover {
+    border-color: #9fc7b4;
+    background: #f0fdf4;
+    color: var(--org-school-green-800);
+}
+
+.view-btn.active {
+    background: linear-gradient(135deg, var(--org-school-green-800), var(--org-school-green-700));
+    border-color: var(--org-school-green-700);
+    color: #ffffff;
+    box-shadow: 0 10px 24px rgba(6, 95, 70, 0.28);
+}
+
+#calendar {
+    border: 1px solid var(--org-border);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.fc-col-header-cell {
+    background: #f7fcf9 !important;
+}
+
+.fc-day-today {
+    background-color: #ecfdf5 !important;
+}
+
+.fc-day-today .fc-daygrid-day-number {
+    color: var(--org-school-green-800) !important;
+}
+
+.fc-event[data-event-state="active"] {
+    background-color: var(--org-school-green-700) !important;
+}
+
+.fc-event[data-event-state="upcoming"] {
+    background-color: var(--org-school-gold-500) !important;
+    color: #1f2937 !important;
+}
+
+.fc-more-link {
+    color: var(--org-school-green-700) !important;
+}
+
+.modal-content {
+    border: 1px solid #d6e7de;
+    box-shadow: 0 20px 40px rgba(15, 23, 42, 0.14);
 }

@@ -6,6 +6,7 @@ session_start();
 include __DIR__ . '/../../config/db.php';
 include __DIR__ . '/../../config/config.php';
 include __DIR__ . '/../../config/csrf.php';
+include __DIR__ . '/../../config/departments.php';
 
 if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'student') {
     header("Location: " . BASE_URL . "/views/login.php?error=" . urlencode("Access denied"));
@@ -33,16 +34,16 @@ try {
 
 if ($event_id > 0) {
     if ($eventsHasMaxCapacity) {
-        $stmt = $conn->prepare("SELECT id, status, max_capacity FROM events WHERE id = ?");
+        $stmt = $conn->prepare("SELECT e.id, e.status, e.max_capacity, e.department, u.department AS student_department FROM events e JOIN users u ON u.id = ? WHERE e.id = ?");
     } else {
-        $stmt = $conn->prepare("SELECT id, status FROM events WHERE id = ?");
+        $stmt = $conn->prepare("SELECT e.id, e.status, e.department, u.department AS student_department FROM events e JOIN users u ON u.id = ? WHERE e.id = ?");
     }
     if (!$stmt) {
         $conn->close();
         header("Location: " . BASE_URL . "/backend/auth/dashboard_student.php?msg=" . urlencode("Server error."));
         exit();
     }
-    $stmt->bind_param("i", $event_id);
+    $stmt->bind_param("ii", $user_id, $event_id);
     $stmt->execute();
     $ev = $stmt->get_result()->fetch_assoc();
     $stmt->close();
@@ -52,6 +53,8 @@ if ($event_id > 0) {
 
     if (!$ev || ($ev['status'] ?? '') !== 'active') {
         $msg = 'Event not found or not open for registration.';
+    } elseif (!eventify_student_sees_event_department((string)($ev['department'] ?? 'ALL'), $ev['student_department'] ?? null)) {
+        $msg = 'This event is not available for your department.';
     } else {
         $stmt = $conn->prepare("SELECT id FROM registrations WHERE user_id = ? AND event_id = ?");
         $stmt->bind_param("ii", $user_id, $event_id);

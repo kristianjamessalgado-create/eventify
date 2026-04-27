@@ -40,10 +40,15 @@ $messengerHref = BASE_URL . '/backend/messaging/staff_messenger.php';
 <body>
 
 <nav class="adm-navbar">
-    <a href="<?= BASE_URL ?>/backend/admin/dashboard.php" class="adm-brand">
-        <i class="fas fa-calendar-alt"></i>
-        <span>EVENTIFY</span>
-    </a>
+    <div class="d-flex align-items-center">
+        <button type="button" class="nav-btn sidebar-toggle-mobile me-2" id="adminSidebarToggle" aria-label="Toggle sidebar" title="Toggle sidebar">
+            <i class="fas fa-bars"></i>
+        </button>
+        <a href="<?= BASE_URL ?>/backend/admin/dashboard.php" class="adm-brand">
+            <i class="fas fa-calendar-alt"></i>
+            <span>EVENTIFY</span>
+        </a>
+    </div>
     <div class="d-flex align-items-center">
         <a class="nav-btn position-relative me-2" title="Messages (Organizers)" href="<?= htmlspecialchars($messengerHref) ?>" target="_blank" rel="noopener noreferrer">
             <i class="fas fa-comments"></i>
@@ -83,7 +88,9 @@ $messengerHref = BASE_URL . '/backend/messaging/staff_messenger.php';
 </nav>
 
 <div class="dashboard-layout">
-    <aside class="sidebar">
+    <div class="sidebar-backdrop" id="adminSidebarBackdrop" aria-hidden="true"></div>
+    <aside class="sidebar" id="adminSidebar">
+        <button type="button" class="sidebar-close-mobile" id="adminSidebarClose" aria-label="Close menu"><i class="fas fa-times"></i></button>
         <div class="user-info-card">
             <div class="user-avatar-large"><?= strtoupper(substr($admin_name, 0, 1)) ?></div>
             <h3 class="user-name"><?= htmlspecialchars($admin_name) ?></h3>

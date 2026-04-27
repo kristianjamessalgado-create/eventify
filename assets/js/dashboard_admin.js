@@ -1,4 +1,61 @@
 document.addEventListener('DOMContentLoaded', function () {
+    var sidebarToggle = document.getElementById('adminSidebarToggle');
+    var sidebarClose = document.getElementById('adminSidebarClose');
+    var sidebarBackdrop = document.getElementById('adminSidebarBackdrop');
+    var adminSidebar = document.getElementById('adminSidebar');
+    var isMobileView = function () { return window.matchMedia('(max-width: 768px)').matches; };
+    var closeMobileSidebar = function () { document.body.classList.remove('admin-sidebar-open'); };
+    var getCalendarInstance = function () {
+        if (window.eventifyCalendar && typeof window.eventifyCalendar.updateSize === 'function') {
+            return window.eventifyCalendar;
+        }
+        return null;
+    };
+    var refreshCalendarLayout = function () {
+        var cal = getCalendarInstance();
+        if (!cal) return;
+        cal.updateSize();
+    };
+    var refreshCalendarLayoutSmooth = function () {
+        [0, 90, 180, 280, 360].forEach(function (ms) {
+            setTimeout(refreshCalendarLayout, ms);
+        });
+    };
+    if (sidebarToggle) {
+        sidebarToggle.addEventListener('click', function () {
+            if (isMobileView()) {
+                document.body.classList.toggle('admin-sidebar-open');
+                return;
+            }
+            var collapsed = document.body.classList.toggle('admin-sidebar-collapsed');
+            if (adminSidebar) {
+                adminSidebar.classList.toggle('is-collapsed', collapsed);
+            }
+            refreshCalendarLayoutSmooth();
+        });
+    }
+    if (sidebarClose) sidebarClose.addEventListener('click', closeMobileSidebar);
+    if (sidebarBackdrop) sidebarBackdrop.addEventListener('click', closeMobileSidebar);
+    if (adminSidebar) {
+        adminSidebar.addEventListener('transitionend', function (e) {
+            if (e.propertyName === 'width' || e.propertyName === 'padding-left' || e.propertyName === 'padding-right') {
+                refreshCalendarLayout();
+            }
+        });
+        adminSidebar.addEventListener('click', function (e) {
+            var target = e.target.closest('.action-btn, [data-bs-toggle="modal"]');
+            if (target && isMobileView()) {
+                closeMobileSidebar();
+            }
+        });
+    }
+    window.addEventListener('resize', function () {
+        if (!isMobileView()) {
+            closeMobileSidebar();
+        }
+        refreshCalendarLayoutSmooth();
+    });
+
     var settingsForm = document.getElementById('adminSettingsForm');
     var settingsUpdateBtn = document.getElementById('adminSettingsUpdateBtn');
     var confirmSettingsModalEl = document.getElementById('confirmAdminSettingsUpdateModal');

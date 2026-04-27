@@ -4,6 +4,7 @@ session_start();
 require_once __DIR__ . '/../../config/db.php';
 require_once __DIR__ . '/../../config/config.php';
 require_once __DIR__ . '/../../config/csrf.php';
+require_once __DIR__ . '/../../config/student_profile_fields.php';
 
 // Only allow logged-in students
 if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? null) !== 'student') {
@@ -12,6 +13,7 @@ if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? null) !== 'student') {
 }
 
 $studentId = (int) $_SESSION['user_id'];
+eventify_users_ensure_student_profile_fields($conn);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!csrf_validate()) {
@@ -19,6 +21,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit();
     }
     $name = trim($_POST['name'] ?? '');
+    $studentCourse = trim($_POST['student_course'] ?? '');
+    $studentYearLevel = trim($_POST['student_year_level'] ?? '');
+    $studentAcademicYear = trim($_POST['student_academic_year'] ?? '');
     $error = '';
     $profilePicturePath = null;
 
@@ -27,6 +32,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = "Full name is required.";
     } elseif (strlen($name) > 100) {
         $error = "Full name must be 100 characters or less.";
+    } elseif (!eventify_student_course_program_valid($studentCourse)) {
+        $error = "Please select your course / program from the list (required for attendance records).";
+    } elseif ($studentYearLevel !== '' && !array_key_exists($studentYearLevel, eventify_student_year_level_options())) {
+        $error = "Invalid year level selection.";
+    } elseif (!eventify_student_academic_year_valid($studentAcademicYear)) {
+        $error = "Invalid school year (use format like 2025-2026).";
+    }
+    $derivedDepartment = eventify_student_course_program_department($studentCourse);
+    if ($error === '' && $derivedDepartment === '') {
+        $error = "Could not determine department from the selected course / program.";
     }
 
     // Handle profile picture upload
@@ -90,13 +105,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Update student profile
     if ($profilePicturePath !== null) {
-        // Update both name and profile picture
-        $stmt = $conn->prepare("UPDATE users SET name = ?, profile_picture = ? WHERE id = ?");
-        $stmt->bind_param("ssi", $name, $profilePicturePath, $studentId);
+        $stmt = $conn->prepare("UPDATE users SET name = ?, profile_picture = ?, department = ?, student_course = ?, student_year_level = ?, student_academic_year = ? WHERE id = ?");
+        $stmt->bind_param("ssssssi", $name, $profilePicturePath, $derivedDepartment, $studentCourse, $studentYearLevel, $studentAcademicYear, $studentId);
     } else {
-        // Update name only
-        $stmt = $conn->prepare("UPDATE users SET name = ? WHERE id = ?");
-        $stmt->bind_param("si", $name, $studentId);
+        $stmt = $conn->prepare("UPDATE users SET name = ?, department = ?, student_course = ?, student_year_level = ?, student_academic_year = ? WHERE id = ?");
+        $stmt->bind_param("sssssi", $name, $derivedDepartment, $studentCourse, $studentYearLevel, $studentAcademicYear, $studentId);
     }
 
     if ($stmt) {

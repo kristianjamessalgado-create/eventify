@@ -6,6 +6,7 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/../../config/db.php';
 require_once __DIR__ . '/../../config/config.php';
 require_once __DIR__ . '/../../config/csrf.php';
+require_once __DIR__ . '/../../config/student_profile_fields.php';
 require_once __DIR__ . '/../lib/activity_logger.php';
 require_once __DIR__ . '/../lib/account_email_otp.php';
 
@@ -83,9 +84,26 @@ try {
         $passwordHash = (string)($payload['password_hash'] ?? '');
         $role = (string)($payload['role'] ?? '');
         $department = $payload['department'] ?? null;
+        $studentCourse = trim((string)($payload['student_course'] ?? ''));
+        $studentYearLevel = trim((string)($payload['student_year_level'] ?? ''));
         $userIdCode = (string)($payload['user_code'] ?? '');
         if ($name === '' || $passwordHash === '' || $userIdCode === '' || !in_array($role, ['student', 'organizer', 'multimedia', 'admin'], true)) {
             throw new Exception('Invalid registration payload');
+        }
+        if ($role === 'student') {
+            if (!eventify_student_course_program_valid($studentCourse)) {
+                throw new Exception('Course / program is required for student registration');
+            }
+            if ($studentYearLevel === '' || !array_key_exists($studentYearLevel, eventify_student_year_level_options())) {
+                throw new Exception('Year level is required for student registration');
+            }
+            if (!eventify_student_course_matches_department($studentCourse, (string)$department)) {
+                throw new Exception('Selected course / program does not match the selected department');
+            }
+            eventify_users_ensure_student_profile_fields($conn);
+        } else {
+            $studentCourse = '';
+            $studentYearLevel = '';
         }
 
         $check = $conn->prepare("SELECT id FROM users WHERE email = ?");
@@ -99,8 +117,8 @@ try {
 
         // After OTP verification, all new accounts stay pending until super admin approval.
         $status = 'inactive';
-        $ins = $conn->prepare("INSERT INTO users (user_id, name, email, password, role, department, status) VALUES (?, ?, ?, ?, ?, ?, ?)");
-        $ins->bind_param("sssssss", $userIdCode, $name, $email, $passwordHash, $role, $department, $status);
+        $ins = $conn->prepare("INSERT INTO users (user_id, name, email, password, role, department, student_course, student_year_level, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $ins->bind_param("sssssssss", $userIdCode, $name, $email, $passwordHash, $role, $department, $studentCourse, $studentYearLevel, $status);
         $ins->execute();
         $newUserId = (int)$conn->insert_id;
         $ins->close();

@@ -1,5 +1,30 @@
 <?php
 
+/**
+ * Status used when an event is finished (auto or organizer "mark as ended").
+ * Matches ENUM if `completed` exists, otherwise `closed`.
+ */
+function eventify_events_completed_or_closed_target(mysqli $conn): string
+{
+    static $cached = null;
+    if ($cached !== null) {
+        return $cached;
+    }
+    $cached = 'closed';
+    try {
+        $col = $conn->query("SHOW COLUMNS FROM events LIKE 'status'");
+        if ($col && ($row = $col->fetch_assoc())) {
+            $type = strtolower((string) ($row['Type'] ?? ''));
+            if (strpos($type, "'completed'") !== false) {
+                $cached = 'completed';
+            }
+        }
+    } catch (Throwable $e) {
+        // keep default
+    }
+    return $cached;
+}
+
 function eventify_auto_complete_past_events(mysqli $conn): void
 {
     static $ran = false;
@@ -9,14 +34,7 @@ function eventify_auto_complete_past_events(mysqli $conn): void
     $ran = true;
 
     try {
-        $col = $conn->query("SHOW COLUMNS FROM events LIKE 'status'");
-        $hasCompleted = false;
-        if ($col && ($row = $col->fetch_assoc())) {
-            $type = strtolower((string)($row['Type'] ?? ''));
-            $hasCompleted = (strpos($type, "'completed'") !== false);
-        }
-
-        $targetStatus = $hasCompleted ? 'completed' : 'closed';
+        $targetStatus = eventify_events_completed_or_closed_target($conn);
 
         // End time fallback: if end_time is missing, treat it as 23:59:59 on event date.
         $sql = "

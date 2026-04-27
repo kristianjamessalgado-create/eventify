@@ -3,6 +3,7 @@ session_start();
 include __DIR__ . '/../../config/db.php';
 include __DIR__ . '/../../config/config.php';
 include __DIR__ . '/../../config/csrf.php';
+include __DIR__ . '/../../config/departments.php';
 require_once __DIR__ . '/../lib/event_status_auto.php';
 
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'multimedia') {
@@ -11,6 +12,7 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'multimedia') {
 }
 
 eventify_auto_complete_past_events($conn);
+eventify_events_department_ensure_varchar($conn);
 
 $hasMustChangePasswordColumn = false;
 try {
@@ -56,46 +58,68 @@ if ($chkCol && $chkCol->num_rows > 0) {
 
 // Fetch all events (newest date first)
 $events = [];
-$uid = (int)$session_user_id;
+$uid = (int) $session_user_id;
+$deptWhere = empty($user_department) ? '1=1' : eventify_department_match_sql('e.department');
+$stEv = null;
+
 if ($photoStatusEnabled) {
-    $res = $conn->query("
+    $sqlEv = "
         SELECT e.id, e.title, e.date, e.location, e.department,
                (SELECT COUNT(*) FROM event_photos p WHERE p.event_id = e.id AND p.status = 'published') AS photo_count,
                (SELECT COUNT(*) FROM event_photos p WHERE p.event_id = e.id AND p.uploaded_by = {$uid}) AS my_photo_count,
                (SELECT COUNT(*) FROM event_photos p WHERE p.event_id = e.id AND p.uploaded_by = {$uid} AND p.status = 'draft') AS my_draft_count
         FROM events e
         WHERE e.title NOT LIKE 'sample%'
-          AND (" . (empty($user_department) ? "1=1" : "e.department = '" . $conn->real_escape_string($user_department) . "' OR e.department = 'ALL'") . ")
+          AND ({$deptWhere})
         ORDER BY e.date DESC, e.id DESC
-    ");
+    ";
 } else {
-    $res = $conn->query("
+    $sqlEv = "
         SELECT e.id, e.title, e.date, e.location, e.department,
                (SELECT COUNT(*) FROM event_photos p WHERE p.event_id = e.id) AS photo_count,
                (SELECT COUNT(*) FROM event_photos p WHERE p.event_id = e.id AND p.uploaded_by = {$uid}) AS my_photo_count,
                0 AS my_draft_count
         FROM events e
         WHERE e.title NOT LIKE 'sample%'
-          AND (" . (empty($user_department) ? "1=1" : "e.department = '" . $conn->real_escape_string($user_department) . "' OR e.department = 'ALL'") . ")
+          AND ({$deptWhere})
         ORDER BY e.date DESC, e.id DESC
-    ");
+    ";
+}
+
+if (empty($user_department)) {
+    $res = $conn->query($sqlEv);
+} else {
+    $stEv = $conn->prepare($sqlEv);
+    if ($stEv) {
+        $stEv->bind_param('ss', $user_department, $user_department);
+        $stEv->execute();
+        $res = $stEv->get_result();
+    } else {
+        $res = false;
+    }
 }
 if ($res) {
     while ($row = $res->fetch_assoc()) {
         $events[] = $row;
     }
 }
+if ($stEv) {
+    $stEv->close();
+}
 
 // Fetch upcoming events (department-aware) for modal
 $upcomingEvents = [];
 $today = date('Y-m-d');
+$deptUpSql = eventify_department_match_sql('department');
 if (!empty($user_department)) {
-    $stmtUp = $conn->prepare("SELECT id, title, description, date, location, department FROM events WHERE status = 'active' AND date >= ? AND (department = ? OR department = 'ALL') AND title NOT LIKE 'sample%' ORDER BY date ASC, id ASC LIMIT 12");
+    $stmtUp = $conn->prepare("SELECT id, title, description, date, location, department FROM events WHERE status = 'active' AND date >= ? AND {$deptUpSql} AND title NOT LIKE 'sample%' ORDER BY date ASC, id ASC LIMIT 12");
     if ($stmtUp) {
-        $stmtUp->bind_param("ss", $today, $user_department);
+        $stmtUp->bind_param('sss', $today, $user_department, $user_department);
         if ($stmtUp->execute()) {
             $resUp = $stmtUp->get_result();
-            if ($resUp) $upcomingEvents = $resUp->fetch_all(MYSQLI_ASSOC);
+            if ($resUp) {
+                $upcomingEvents = $resUp->fetch_all(MYSQLI_ASSOC);
+            }
         }
         $stmtUp->close();
     }

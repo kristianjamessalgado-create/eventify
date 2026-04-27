@@ -5,6 +5,8 @@ session_start();
 include __DIR__ . '/../../config/db.php';
 include __DIR__ . '/../../config/config.php'; // for BASE_URL
 include __DIR__ . '/../../config/csrf.php';
+include __DIR__ . '/../../config/departments.php';
+require_once __DIR__ . '/../../config/student_profile_fields.php';
 require_once __DIR__ . '/../lib/event_status_auto.php';
 
 // Only allow logged-in students
@@ -14,6 +16,8 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'student') {
 }
 
 eventify_auto_complete_past_events($conn);
+eventify_events_department_ensure_varchar($conn);
+eventify_users_ensure_student_profile_fields($conn);
 
 $hasMustChangePasswordColumn = false;
 try {
@@ -41,7 +45,7 @@ if ($hasMustChangePasswordColumn) {
 $session_user_id = $_SESSION['user_id'];
 
 // Fetch user info (including department and profile picture)
-$stmt = $conn->prepare("SELECT id, user_id, name, department, profile_picture FROM users WHERE id = ?");
+$stmt = $conn->prepare("SELECT id, user_id, name, department, profile_picture, student_course, student_year_level, student_academic_year FROM users WHERE id = ?");
 $stmt->bind_param("i", $session_user_id);
 $stmt->execute();
 $result = $stmt->get_result();
@@ -112,28 +116,36 @@ try {
     // Keep dashboard available when settings table is unavailable.
 }
 
-// Fetch events filtered by student's department
+// Fetch events filtered by student's department (supports multi-audience JSON in events.department)
+$deptSql = eventify_department_match_sql('department');
 if ($department) {
-    $stmt2 = $conn->prepare("SELECT * FROM events WHERE status = 'active' AND (department = ? OR department = 'ALL') ORDER BY date ASC");
-    $stmt2->bind_param("s", $department);
-} else {
-    // Fallback: if no department set, show all active events
-    $stmt2 = $conn->prepare("SELECT * FROM events WHERE status = 'active' ORDER BY date ASC");
-}
-
-if ($stmt2 && $stmt2->execute()) {
-    $result2 = $stmt2->get_result();
-    if ($result2) {
-        $events = $result2->fetch_all(MYSQLI_ASSOC);
+    $stmt2 = $conn->prepare("SELECT * FROM events WHERE status IN ('active','completed','closed') AND {$deptSql} ORDER BY date ASC");
+    if ($stmt2) {
+        $stmt2->bind_param('ss', $department, $department);
+        $stmt2->execute();
+        $result2 = $stmt2->get_result();
+        if ($result2) {
+            $events = $result2->fetch_all(MYSQLI_ASSOC);
+        }
+        $stmt2->close();
     }
-    $stmt2->close();
+} else {
+    $stmt2 = $conn->prepare("SELECT * FROM events WHERE status IN ('active','completed','closed') ORDER BY date ASC");
+    if ($stmt2 && $stmt2->execute()) {
+        $result2 = $stmt2->get_result();
+        if ($result2) {
+            $events = $result2->fetch_all(MYSQLI_ASSOC);
+        }
+        $stmt2->close();
+    }
 }
 
 // Fetch this student's attendance records (events they checked into via QR)
 $attendance_records = [];
 $stmt_att = $conn->prepare("
     SELECT r.id, r.event_id, r.status, r.time_in, r.time_out,
-           e.title AS event_title, e.date AS event_date, e.location AS event_location
+           e.title AS event_title, e.date AS event_date, e.location AS event_location,
+           e.status AS event_status
     FROM registrations r
     JOIN events e ON e.id = r.event_id
     WHERE r.user_id = ? AND r.status = 'present' AND r.time_in IS NOT NULL
@@ -146,6 +158,56 @@ if ($stmt_att->execute()) {
         $attendance_records = $res_att->fetch_all(MYSQLI_ASSOC);
     }
     $stmt_att->close();
+}
+
+$attended_event_ids = [];
+foreach ($attendance_records as $rec) {
+    $eid = (int) ($rec['event_id'] ?? 0);
+    if ($eid > 0) {
+        $attended_event_ids[$eid] = true;
+    }
+}
+$attended_event_ids = array_keys($attended_event_ids);
+
+// Past attended events may be auto-marked completed/closed — merge them into the calendar list for feedback/history
+if (!empty($attended_event_ids)) {
+    $existing_event_ids = [];
+    foreach ($events as $evRow) {
+        $existing_event_ids[(int) ($evRow['id'] ?? 0)] = true;
+    }
+    $missingForCalendar = [];
+    foreach ($attended_event_ids as $eid) {
+        if ($eid > 0 && empty($existing_event_ids[$eid])) {
+            $missingForCalendar[] = $eid;
+        }
+    }
+    if (!empty($missingForCalendar)) {
+        $placeholders = implode(',', array_fill(0, count($missingForCalendar), '?'));
+        $types = str_repeat('i', count($missingForCalendar));
+        $params = $missingForCalendar;
+        $deptFrag = eventify_department_match_sql('department');
+        if ($department) {
+            $sqlEx = "SELECT * FROM events WHERE id IN ($placeholders) AND status IN ('completed','closed') AND {$deptFrag} ORDER BY date DESC";
+            $types .= 'ss';
+            $params[] = $department;
+            $params[] = $department;
+        } else {
+            $sqlEx = "SELECT * FROM events WHERE id IN ($placeholders) AND status IN ('completed','closed') ORDER BY date DESC";
+        }
+        $stEx = $conn->prepare($sqlEx);
+        if ($stEx) {
+            $stEx->bind_param($types, ...$params);
+            if ($stEx->execute()) {
+                $resEx = $stEx->get_result();
+                if ($resEx) {
+                    while ($rowEx = $resEx->fetch_assoc()) {
+                        $events[] = $rowEx;
+                    }
+                }
+            }
+            $stEx->close();
+        }
+    }
 }
 
 // RSVP: which events this student is registered for
@@ -173,6 +235,7 @@ if ($rc) {
 
 // Feedback already submitted (event_feedback table may not exist yet)
 $feedback_submitted_ids = [];
+$feedback_lookup_ok = true;
 try {
     $stmtFb = $conn->prepare("SELECT event_id FROM event_feedback WHERE user_id = ?");
     if ($stmtFb) {
@@ -189,6 +252,43 @@ try {
     }
 } catch (Throwable $e) {
     $feedback_submitted_ids = [];
+    $feedback_lookup_ok = false;
+}
+
+// Events where the student checked in, the event is finished (by date or status), and feedback not submitted — used for urgent dashboard prompt
+$pending_urgent_feedback_events = [];
+$today_feedback = date('Y-m-d');
+$seen_urgent_fb = [];
+$feedback_ack_session = $_SESSION['eventify_feedback_ack'] ?? [];
+if (!is_array($feedback_ack_session)) {
+    $feedback_ack_session = [];
+}
+if ($feedback_lookup_ok) {
+foreach ($attendance_records as $rec) {
+    $eid = (int) ($rec['event_id'] ?? 0);
+    if ($eid < 1 || !empty($seen_urgent_fb[$eid])) {
+        continue;
+    }
+    if (in_array($eid, $feedback_submitted_ids, true)) {
+        continue;
+    }
+    if (in_array($eid, $feedback_ack_session, true)) {
+        continue;
+    }
+    $evDate = trim((string) ($rec['event_date'] ?? ''));
+    $st = strtolower((string) ($rec['event_status'] ?? ''));
+    $endedForFeedback = ($evDate !== '' && $evDate < $today_feedback) || $st === 'closed' || $st === 'completed';
+    if (!$endedForFeedback) {
+        continue;
+    }
+    $seen_urgent_fb[$eid] = true;
+    $pending_urgent_feedback_events[] = [
+        'id'     => $eid,
+        'title'  => (string) ($rec['event_title'] ?? 'Event'),
+        'date'   => $evDate,
+        'status' => (string) ($rec['event_status'] ?? ''),
+    ];
+}
 }
 
 // In-app notifications

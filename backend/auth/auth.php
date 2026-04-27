@@ -23,6 +23,7 @@ error_reporting(E_ALL);
 include __DIR__ . '/../../config/db.php';
 include __DIR__ . '/../../config/config.php'; // For BASE_URL
 include __DIR__ . '/../../config/csrf.php';
+include __DIR__ . '/../../config/student_profile_fields.php';
 include __DIR__ . '/../lib/activity_logger.php';
 include __DIR__ . '/../lib/account_email_otp.php';
 
@@ -58,11 +59,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $confirm_password = $_POST['confirm_password'] ?? '';
         $role     = $_POST['role'] ?? '';
         $department = isset($_POST['department']) ? trim($_POST['department']) : null;
+        $studentCourse = trim((string)($_POST['student_course'] ?? ''));
+        $studentYearLevel = trim((string)($_POST['student_year_level'] ?? ''));
+        $acceptLegal = (string)($_POST['accept_legal'] ?? '');
 
         $error = '';
 
         if ($password !== $confirm_password) {
             $error = "Passwords do not match.";
+        } elseif ($acceptLegal !== '1') {
+            $error = "You must agree to the Data Privacy Notice and Terms and Conditions.";
         } elseif (!preg_match('/[A-Z]/', $password)
             || !preg_match('/[\W_]/', $password)
             || strlen($password) < 8) {
@@ -73,6 +79,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = "Department is required for students.";
         } elseif ($role === 'student' && !in_array($department, $allowedDepartments, true)) {
             $error = "Invalid department selected.";
+        } elseif ($role === 'student' && !eventify_student_course_program_valid($studentCourse)) {
+            $error = "Course / program is required for students.";
+        } elseif ($role === 'student' && ($studentYearLevel === '' || !array_key_exists($studentYearLevel, eventify_student_year_level_options()))) {
+            $error = "Year level is required for students.";
+        } elseif ($role === 'student' && !eventify_student_course_matches_department($studentCourse, (string)$department)) {
+            $error = "Selected course / program does not match the selected department.";
         } elseif (strlen($name) < 1 || strlen($name) > 100) {
             $error = "Name must be between 1 and 100 characters.";
         } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -109,6 +121,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'password_hash' => $hashed_password,
                         'role' => $role,
                         'department' => $department,
+                        'student_course' => ($role === 'student' ? $studentCourse : ''),
+                        'student_year_level' => ($role === 'student' ? $studentYearLevel : ''),
                         'user_code' => $user_id,
                     ],
                     10
