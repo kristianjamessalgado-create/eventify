@@ -7,7 +7,7 @@ $organizer_department_choices = $organizer_department_choices ?? [];
 $staff_messaging_unread = isset($staff_messaging_unread) ? (int) $staff_messaging_unread : 0;
 $messengerHref = BASE_URL . '/backend/messaging/staff_messenger.php';
 $fb = $feedbackStats ?? ['total_feedback' => 0, 'avg_rating' => 0, 'five_star' => 0];
-$feedback_comments_anon = $feedback_comments_anon ?? [];
+$organizer_feedback_list = $organizer_feedback_list ?? [];
 $eventsHasGeo = !empty($eventsHasGeo);
 ?>
 <!DOCTYPE html>
@@ -158,6 +158,19 @@ $eventsHasGeo = !empty($eventsHasGeo);
     <!-- Left Sidebar -->
     <aside class="sidebar" id="organizerSidebar">
         <button type="button" class="sidebar-close-mobile" id="organizerSidebarClose" aria-label="Close menu"><i class="fas fa-times"></i></button>
+        <!-- Organizer Profile Card -->
+        <div class="organizer-user-card">
+            <div class="organizer-user-avatar">
+                <?php if (!empty($user['profile_picture'])): ?>
+                    <img src="<?= BASE_URL ?>/<?= htmlspecialchars($user['profile_picture']) ?>" alt="<?= htmlspecialchars($user_name) ?>" class="organizer-user-avatar-img">
+                <?php else: ?>
+                    <?= strtoupper(substr((string)$user_name, 0, 1)) ?>
+                <?php endif; ?>
+            </div>
+            <div class="organizer-user-name"><?= htmlspecialchars($user_name) ?></div>
+            <div class="organizer-user-role">Organizer</div>
+        </div>
+
         <!-- Mini Calendar -->
         <div class="mini-calendar-widget">
             <div class="mini-calendar-header">
@@ -288,7 +301,7 @@ $eventsHasGeo = !empty($eventsHasGeo);
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
-        <p class="text-muted small mb-3">Totals from students who <strong>attended</strong> your events (QR check-in). Comments are <strong>anonymous</strong>—names are not shown.</p>
+        <p class="text-muted small mb-3">Totals from students who <strong>attended</strong> your events (QR check-in). Each student may choose <strong>anonymous</strong> feedback or allow their <strong>name</strong> to appear below.</p>
         <div class="row g-3">
           <div class="col-12">
             <div class="border rounded-3 p-3 bg-light">
@@ -309,23 +322,42 @@ $eventsHasGeo = !empty($eventsHasGeo);
             </div>
           </div>
         </div>
-        <?php if (!empty($feedback_comments_anon)): ?>
+        <?php if (!empty($organizer_feedback_list)): ?>
           <hr class="my-3">
-          <h6 class="small text-uppercase text-muted mb-2">Recent anonymous comments</h6>
-          <ul class="list-unstyled mb-0 small" style="max-height: 220px; overflow-y: auto;">
-            <?php foreach ($feedback_comments_anon as $fc): ?>
+          <h6 class="small text-uppercase text-muted mb-2">Recent student feedback</h6>
+          <ul class="list-unstyled mb-0 small" style="max-height: 280px; overflow-y: auto;">
+            <?php foreach ($organizer_feedback_list as $fc): ?>
+              <?php
+                $anon = !isset($fc['is_anonymous']) || (int) $fc['is_anonymous'] === 1;
+                $who = $anon ? 'Anonymous' : trim((string)($fc['student_name'] ?? ''));
+                if (!$anon && $who === '') {
+                    $who = 'Student';
+                }
+                $code = $anon ? '' : trim((string)($fc['student_code'] ?? ''));
+              ?>
               <li class="border rounded p-2 mb-2 bg-white">
                 <div class="d-flex justify-content-between gap-2 mb-1">
                   <span class="fw-semibold text-truncate"><?= htmlspecialchars((string)($fc['event_title'] ?? 'Event')) ?></span>
                   <span class="text-warning text-nowrap"><i class="fas fa-star me-1"></i><?= (int)($fc['rating'] ?? 0) ?>/5</span>
                 </div>
-                <div class="text-muted" style="font-size: 0.8rem;"><?= date('M j, Y', strtotime($fc['created_at'] ?? 'now')) ?></div>
-                <div class="mt-1"><?= nl2br(htmlspecialchars((string)($fc['comment'] ?? ''))) ?></div>
+                <div class="text-muted d-flex flex-wrap gap-2 align-items-center" style="font-size: 0.8rem;">
+                  <span><?= date('M j, Y', strtotime($fc['created_at'] ?? 'now')) ?></span>
+                  <?php if ($anon): ?>
+                    <span class="badge bg-secondary">Anonymous</span>
+                  <?php else: ?>
+                    <span class="badge bg-success"><?= htmlspecialchars($who) ?><?= $code !== '' ? ' · ' . htmlspecialchars($code) : '' ?></span>
+                  <?php endif; ?>
+                </div>
+                <?php if (trim((string)($fc['comment'] ?? '')) !== ''): ?>
+                  <div class="mt-1"><?= nl2br(htmlspecialchars((string)($fc['comment'] ?? ''))) ?></div>
+                <?php else: ?>
+                  <div class="mt-1 text-muted fst-italic">(No written comment)</div>
+                <?php endif; ?>
               </li>
             <?php endforeach; ?>
           </ul>
         <?php else: ?>
-          <p class="small text-muted mb-0 mt-2">No written comments yet. Students can add optional comments with their rating after they attend.</p>
+          <p class="small text-muted mb-0 mt-2">No feedback yet. Students can submit a rating (and optional comment) after they attend via QR check-in.</p>
         <?php endif; ?>
       </div>
       <div class="modal-footer border-0 pt-0">
@@ -798,6 +830,27 @@ window.__organizerSettings = <?= json_encode($organizer_settings, JSON_HEX_TAG|J
         <p class="mb-1"><strong>Created by:</strong> <span id="eventOrganizer"></span></p>
         <p class="mt-3 mb-1"><strong>Description:</strong></p>
         <p id="eventDescription" class="mb-2 text-muted"></p>
+        <div id="eventOtpVerifyWrap" class="mt-3" style="display:none;">
+          <div class="small text-muted mb-2">This event is pending. Enter the OTP sent by admin to verify and activate it.</div>
+          <form method="POST" action="<?= BASE_URL ?>/backend/auth/verify_event_approval_otp.php" class="d-flex gap-2 align-items-center flex-wrap" id="eventOtpVerifyForm">
+            <?= csrf_field() ?>
+            <input type="hidden" name="event_id" id="eventOtpEventId" value="">
+            <input
+              type="text"
+              name="otp_code"
+              id="eventOtpCodeInput"
+              class="form-control form-control-sm"
+              style="width: 130px;"
+              maxlength="6"
+              placeholder="Enter OTP"
+              required
+              pattern="\d{6}"
+              inputmode="numeric"
+              autocomplete="one-time-code"
+            >
+            <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-key me-1"></i>Verify OTP</button>
+          </form>
+        </div>
         <p class="mb-0"><small><strong>Created at:</strong> <span id="eventCreatedAt"></span></small></p>
       </div>
       <div class="modal-footer">

@@ -1162,7 +1162,7 @@ body, html {
         transition: transform 0.25s ease;
         border-right: 1px solid #e5e7eb;
         box-shadow: 4px 0 24px rgba(0, 0, 0, 0.15);
-        padding-top: 52px;
+        padding-top: 0;
     }
 
     body.student-sidebar-open .sidebar {
@@ -1278,6 +1278,7 @@ body, html {
     }
 
     .sidebar {
+        padding-top: 0;
         position: sticky;
         top: 64px;
         height: calc(100vh - 64px);
@@ -1369,18 +1370,18 @@ body, html {
 ================================ */
 :root {
     --school-white: #ffffff;
-    --school-cream: #fafdf8;
-    --school-olive-top: #7a8d3b;
-    --school-forest-mid: #164a1a;
-    --school-forest-deep: #032802;
-    --school-forest-card: #013220;
-    --school-gold: #f9ed00;
-    --school-gold-dim: #d4c400;
-    --school-green-bright: #15803d;
-    --school-border: rgba(249, 237, 0, 0.35);
-    --school-soft-bg: rgba(1, 50, 32, 0.22);
+    --school-cream: #f7f4e7;
+    --school-olive-top: #b7be77;
+    --school-forest-mid: #3f6a2a;
+    --school-forest-deep: #153313;
+    --school-forest-card: #1b4a1b;
+    --school-gold: #e6c54a;
+    --school-gold-dim: #b88f2a;
+    --school-green-bright: #3d8a35;
+    --school-border: rgba(230, 197, 74, 0.42);
+    --school-soft-bg: rgba(27, 74, 27, 0.16);
     --school-text-on-dark: #ffffff;
-    --school-text-muted: rgba(255, 255, 255, 0.78);
+    --school-text-muted: rgba(247, 244, 231, 0.84);
 }
 
 body, html {
@@ -1745,5 +1746,52 @@ body, html {
     #student-calendar {
         border-radius: 12px;
         padding: 8px;
+    }
+}
+
+/* ===============================
+   LANDING-STYLE SHIMMER CTA
+   Mirrors index.css Get Started sweep
+================================ */
+.create-btn,
+.btn-primary,
+.view-btn.active,
+.action-btn:not(.logout-btn) {
+    position: relative;
+    overflow: hidden;
+}
+
+.create-btn::after,
+.btn-primary::after,
+.view-btn.active::after,
+.action-btn:not(.logout-btn)::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(
+        105deg,
+        transparent 0%,
+        transparent 38%,
+        rgba(255, 255, 255, 0.3) 50%,
+        transparent 62%,
+        transparent 100%
+    );
+    transform: translateX(-120%);
+    animation: dashboardShimmer 3.4s ease-in-out infinite;
+    pointer-events: none;
+}
+
+@keyframes dashboardShimmer {
+    0%, 18% { transform: translateX(-120%); }
+    40%, 100% { transform: translateX(120%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .create-btn::after,
+    .btn-primary::after,
+    .view-btn.active::after,
+    .action-btn:not(.logout-btn)::after {
+        animation: none;
     }
 }

@@ -58,6 +58,23 @@
 .sidebar .quick-actions a.action-btn:focus {
     color: #fef08a !important;
 }
+
+.admin-pending-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    height: 22px;
+    margin-left: 0.45rem;
+    padding: 0 0.4rem;
+    border-radius: 999px;
+    background: #dc2626;
+    color: #ffffff;
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+}
 #auditLogModal .modal-body { max-height: min(70vh, 520px); overflow-y: auto; }
 #auditLogModal .table { font-size: 0.8rem; }
 #auditLogModal .table thead th { position: sticky; top: 0; background: #f8fafc; z-index: 1; }
@@ -66,16 +83,74 @@
 .adm-chart-card h6 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 0.75rem; }
 .adm-chart-wrap { position: relative; height: 220px; }
 .adm-chart-empty { display: flex; align-items: center; justify-content: center; height: 100%; color: #64748b; font-size: 0.85rem; text-align: center; }
+.admin-dashboard .dashboard-layout {
+    display: flex;
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+    min-height: calc(100vh - 64px);
+    overflow: visible;
+}
+
+.admin-dashboard #adminSidebar {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+}
+
+/* Admin profile card: match organizer/student forest-gold theme */
+.admin-dashboard #adminSidebar .user-info-card {
+    background: linear-gradient(135deg, #2f6626 0%, #1b4a1b 60%, #143a13 100%);
+    border: 2px solid #e6c54a;
+    border-radius: 14px;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+    color: #ffffff;
+}
+
+.admin-dashboard #adminSidebar .user-avatar-large {
+    background: linear-gradient(135deg, #e6c54a 0%, #b88f2a 100%);
+    color: #0f4b2d;
+    border: 3px solid rgba(27, 74, 27, 0.35);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+}
+
+.admin-dashboard #adminSidebar .user-name {
+    color: #ffffff;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
+}
+
+.admin-dashboard #adminSidebar .user-id {
+    color: rgba(247, 244, 231, 0.9);
+}
+
+.admin-dashboard #adminSidebar .user-dept-badge {
+    background: #e6c54a;
+    color: #1b4a1b;
+    border: 1px solid rgba(27, 74, 27, 0.35);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+}
+
+.admin-dashboard .main-content {
+    min-width: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
 .sidebar-toggle-mobile {
     display: inline-flex;
 }
 /* Admin navbar is in normal flow, so remove inherited 64px top offset from student CSS. */
 .dashboard-layout {
-    margin-top: 0;
+    margin-top: 0 !important;
 }
 /* Remove inherited top inset in sidebar so it sits flush under admin navbar. */
-.sidebar {
-    padding-top: 0;
+.sidebar,
+#adminSidebar {
+    padding-top: 0 !important;
+    margin-top: 0 !important;
+}
+
+#adminSidebar .user-info-card {
+    margin-top: 0 !important;
 }
 .sidebar-close-mobile {
     display: none;
@@ -98,6 +173,20 @@
 }
 
 @media (min-width: 769px) {
+    .dashboard-layout {
+        margin-top: 0 !important;
+        padding-top: 0 !important;
+    }
+
+    /* Cancel inherited student desktop sticky offset on admin sidebar. */
+    #adminSidebar {
+        position: relative !important;
+        top: 0 !important;
+        height: auto !important;
+        margin-top: 0 !important;
+        padding-top: 0 !important;
+    }
+
     #adminSidebar {
         transition: width 0.34s cubic-bezier(0.22, 1, 0.36, 1),
                     padding-left 0.34s cubic-bezier(0.22, 1, 0.36, 1),
@@ -105,6 +194,12 @@
                     opacity 0.22s ease,
                     border-color 0.22s ease,
                     box-shadow 0.22s ease;
+    }
+
+    .admin-dashboard #adminSidebar {
+        position: relative !important;
+        top: 0 !important;
+        height: auto !important;
     }
 
     body.admin-sidebar-collapsed #adminSidebar {
@@ -137,6 +232,11 @@
 }
 
 @media (max-width: 768px) {
+    /* Hard reset inherited student offsets so sidebar starts immediately. */
+    .dashboard-layout {
+        padding-top: 0 !important;
+    }
+
     .sidebar-backdrop {
         position: fixed;
         inset: 64px 0 0 0;
@@ -158,7 +258,8 @@
         height: auto !important;
         z-index: 1001 !important;
         transition: transform 0.22s ease;
-        padding-top: 52px !important;
+        padding-top: 0 !important;
+        margin-top: 0 !important;
     }
 
     body.admin-sidebar-open #adminSidebar {
@@ -250,28 +351,16 @@
 
     .dashboard-layout {
         flex-direction: column;
-        margin-top: 0;
+        margin-top: 0 !important;
         height: auto;
         min-height: calc(100vh - 64px);
         position: relative;
         z-index: 1;
     }
 
-    /* Override student.css mobile off-canvas sidebar behavior for admin */
-    .sidebar {
-        position: static !important;
-        top: auto !important;
-        left: auto !important;
-        bottom: auto !important;
-        transform: none !important;
-        width: 100% !important;
-        max-width: 100% !important;
-        height: auto;
-        border-right: none;
-        border-bottom: 1px solid #e5e7eb;
-        box-shadow: none;
-        padding-top: 1rem;
-        z-index: auto !important;
+    .admin-dashboard .dashboard-layout {
+        flex-direction: row;
+        min-height: calc(100vh - 64px);
     }
     .main-content {
         min-width: 0;
@@ -295,5 +384,55 @@
     .admin-calendar-legend {
         margin: 0 1rem 0.75rem;
         gap: 0.5rem 0.8rem;
+    }
+}
+
+/* ===============================
+   LANDING-STYLE SHIMMER CTA
+   Mirrors index.css Get Started sweep
+================================ */
+.adm-btn-approve,
+.adm-user-menu,
+.btn-primary,
+.view-btn.active,
+.action-btn:not(.logout-btn) {
+    position: relative;
+    overflow: hidden;
+}
+
+.adm-btn-approve::after,
+.adm-user-menu::after,
+.btn-primary::after,
+.view-btn.active::after,
+.action-btn:not(.logout-btn)::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(
+        105deg,
+        transparent 0%,
+        transparent 38%,
+        rgba(255, 255, 255, 0.3) 50%,
+        transparent 62%,
+        transparent 100%
+    );
+    transform: translateX(-120%);
+    animation: dashboardShimmer 3.4s ease-in-out infinite;
+    pointer-events: none;
+}
+
+@keyframes dashboardShimmer {
+    0%, 18% { transform: translateX(-120%); }
+    40%, 100% { transform: translateX(120%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .adm-btn-approve::after,
+    .adm-user-menu::after,
+    .btn-primary::after,
+    .view-btn.active::after,
+    .action-btn:not(.logout-btn)::after {
+        animation: none;
     }
 }

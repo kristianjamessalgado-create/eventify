@@ -15,6 +15,16 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'organizer') {
 $session_user_id = $_SESSION['user_id'];
 $error   = '';
 $success = '';
+$eventsHasMaxCapacity = false;
+
+try {
+    $mcCol = $conn->query("SHOW COLUMNS FROM events WHERE Field = 'max_capacity'");
+    if ($mcCol && $mcCol->num_rows >= 1) {
+        $eventsHasMaxCapacity = true;
+    }
+} catch (Throwable $e) {
+    $eventsHasMaxCapacity = false;
+}
 
 // Get event ID
 $event_id = isset($_GET['id']) ? (int) $_GET['id'] : 0;
@@ -23,9 +33,10 @@ if ($event_id <= 0) {
     exit();
 }
 
-// Fetch event and ensure it belongs to this organizer (max_capacity if column exists)
-$stmt = $conn->prepare("SELECT id, title, description, date, location, department, max_capacity FROM events WHERE id = ? AND organizer_id = ?");
-if (!$stmt) {
+// Fetch event and ensure it belongs to this organizer
+if ($eventsHasMaxCapacity) {
+    $stmt = $conn->prepare("SELECT id, title, description, date, location, department, max_capacity FROM events WHERE id = ? AND organizer_id = ?");
+} else {
     $stmt = $conn->prepare("SELECT id, title, description, date, location, department FROM events WHERE id = ? AND organizer_id = ?");
 }
 if (!$stmt) {
@@ -112,15 +123,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 if (!$error) {
-                    $stmt = $conn->prepare("UPDATE events SET title = ?, description = ?, date = ?, location = ?, department = ?, max_capacity = ? WHERE id = ? AND organizer_id = ?");
-                    if (!$stmt) {
-                        $stmt = $conn->prepare("UPDATE events SET title = ?, description = ?, date = ?, location = ?, department = ? WHERE id = ? AND organizer_id = ?");
-                        $stmt->bind_param("sssssii", $title, $description, $date, $location, $department, $event_id, $session_user_id);
+                    $oldTitle = (string)($event['title'] ?? 'this event');
+                    if ($eventsHasMaxCapacity) {
+                        $stmt = $conn->prepare("UPDATE events SET title = ?, description = ?, date = ?, location = ?, department = ?, max_capacity = ?, status = 'pending', reject_reason = NULL WHERE id = ? AND organizer_id = ?");
+                        if ($stmt) {
+                            $stmt->bind_param("sssssiii", $title, $description, $date, $location, $department, $maxCapVal, $event_id, $session_user_id);
+                        }
                     } else {
-                        $stmt->bind_param("sssssiii", $title, $description, $date, $location, $department, $maxCapVal, $event_id, $session_user_id);
+                        $stmt = $conn->prepare("UPDATE events SET title = ?, description = ?, date = ?, location = ?, department = ?, status = 'pending', reject_reason = NULL WHERE id = ? AND organizer_id = ?");
+                        if ($stmt) {
+                            $stmt->bind_param("sssssii", $title, $description, $date, $location, $department, $event_id, $session_user_id);
+                        }
                     }
 
-                    if ($stmt->execute()) {
+                    if (!$stmt) {
+                        $error = "Database error. Please try again.";
+                    } elseif ($stmt->execute()) {
                         $stmt->close();
                         require_once __DIR__ . '/../lib/activity_logger.php';
                         log_activity(
@@ -130,9 +148,78 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             'event_updated',
                             'event',
                             $event_id,
-                            'Updated event: ' . $title
+                            'Updated event and sent back for approval: ' . $title
                         );
-                        $success = "Event updated successfully!";
+
+                        // Notify admins, affected students, and multimedia after event update.
+                        try {
+                            // 1) Admin + Super Admin approval notification
+                            $admins = $conn->query("SELECT id FROM users WHERE role IN ('admin','super_admin') AND status = 'active'");
+                            if ($admins) {
+                                $adminTitle = 'Event update pending approval';
+                                $adminMsg = 'Organizer updated "' . $title . '" (previously "' . $oldTitle . '"). Please review and approve.';
+                                $insAdmin = $conn->prepare("INSERT INTO notifications (user_id, type, title, message, event_id) VALUES (?, 'event_update_pending_review', ?, ?, ?)");
+                                if ($insAdmin) {
+                                    while ($a = $admins->fetch_assoc()) {
+                                        $adminId = (int)($a['id'] ?? 0);
+                                        if ($adminId > 0) {
+                                            $insAdmin->bind_param("issi", $adminId, $adminTitle, $adminMsg, $event_id);
+                                            $insAdmin->execute();
+                                        }
+                                    }
+                                    $insAdmin->close();
+                                }
+                            }
+
+                            // 2) Registered students notification
+                            $students = $conn->prepare("
+                                SELECT DISTINCT r.user_id
+                                FROM registrations r
+                                INNER JOIN users u ON u.id = r.user_id
+                                WHERE r.event_id = ? AND u.role = 'student'
+                            ");
+                            if ($students) {
+                                $students->bind_param("i", $event_id);
+                                $students->execute();
+                                $sres = $students->get_result();
+                                $studentTitle = 'Event updated';
+                                $studentMsg = 'An event you registered for ("' . $title . '") was updated by the organizer and is pending admin approval.';
+                                $insStudent = $conn->prepare("INSERT INTO notifications (user_id, type, title, message, event_id) VALUES (?, 'event_updated_pending', ?, ?, ?)");
+                                if ($insStudent && $sres) {
+                                    while ($s = $sres->fetch_assoc()) {
+                                        $sid = (int)($s['user_id'] ?? 0);
+                                        if ($sid > 0) {
+                                            $insStudent->bind_param("issi", $sid, $studentTitle, $studentMsg, $event_id);
+                                            $insStudent->execute();
+                                        }
+                                    }
+                                    $insStudent->close();
+                                }
+                                $students->close();
+                            }
+
+                            // 3) Multimedia users notification
+                            $media = $conn->query("SELECT id FROM users WHERE role = 'multimedia' AND status = 'active'");
+                            if ($media) {
+                                $mmTitle = 'Event updated';
+                                $mmMsg = 'Event "' . $title . '" was updated by organizer and is pending admin approval.';
+                                $insMm = $conn->prepare("INSERT INTO notifications (user_id, type, title, message, event_id) VALUES (?, 'event_updated_pending', ?, ?, ?)");
+                                if ($insMm) {
+                                    while ($m = $media->fetch_assoc()) {
+                                        $mid = (int)($m['id'] ?? 0);
+                                        if ($mid > 0) {
+                                            $insMm->bind_param("issi", $mid, $mmTitle, $mmMsg, $event_id);
+                                            $insMm->execute();
+                                        }
+                                    }
+                                    $insMm->close();
+                                }
+                            }
+                        } catch (Throwable $e) {
+                            // Keep update successful even if notifications fail.
+                        }
+
+                        $success = "Event updated and submitted for admin approval.";
                         header("Location: " . BASE_URL . "/backend/auth/dashboardorganizer.php?msg=" . urlencode($success));
                         exit();
                     } else {
@@ -406,6 +493,77 @@ $stmt->close();
                 flex-direction: column;
             }
         }
+
+        /* Theme override: match organizer dashboard palette */
+        :root {
+            --school-cream: #f7f4e7;
+            --school-olive-top: #b7be77;
+            --school-forest-mid: #3f6a2a;
+            --school-forest-deep: #153313;
+            --school-forest-card: #1b4a1b;
+            --school-gold: #e6c54a;
+            --school-gold-dim: #b88f2a;
+            --school-border: rgba(230, 197, 74, 0.42);
+        }
+
+        body {
+            background: linear-gradient(180deg, var(--school-olive-top) 0%, var(--school-forest-mid) 42%, var(--school-forest-deep) 100%);
+            background-attachment: fixed;
+        }
+
+        .edit-event-container {
+            background: linear-gradient(180deg, #ffffff 0%, var(--school-cream) 100%);
+            border: 2px solid var(--school-border);
+            box-shadow: 0 14px 36px rgba(0,0,0,0.35);
+        }
+
+        .edit-event-header {
+            background: linear-gradient(180deg, var(--school-forest-card) 0%, #021a08 100%);
+            border-bottom: 3px solid var(--school-gold);
+        }
+
+        .form-control:focus {
+            border-color: var(--school-gold-dim);
+            box-shadow: 0 0 0 3px rgba(230, 197, 74, 0.25);
+        }
+
+        .btn-primary {
+            background: linear-gradient(180deg, var(--school-forest-card) 0%, var(--school-forest-deep) 100%);
+            color: var(--school-gold);
+            border: 2px solid var(--school-gold);
+        }
+
+        .btn-primary:hover {
+            color: #fff7a8;
+            border-color: #fff7a8;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.28);
+        }
+
+        .btn-secondary {
+            background: rgba(255,255,255,0.85);
+            color: var(--school-forest-card);
+            border: 1px solid rgba(1, 50, 32, 0.28);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(230, 197, 74, 0.2);
+            border-color: var(--school-forest-card);
+        }
+
+        .back-link {
+            color: var(--school-forest-card);
+            background: rgba(230, 197, 74, 0.18);
+            border: 1px solid rgba(1, 50, 32, 0.25);
+            border-radius: 999px;
+            padding: 0.4rem 0.8rem;
+            font-weight: 700;
+        }
+
+        .back-link:hover {
+            color: var(--school-forest-card);
+            background: rgba(230, 197, 74, 0.34);
+            border-color: var(--school-gold-dim);
+        }
     </style>
 </head>
 <body>
@@ -515,7 +673,6 @@ $stmt->close();
                         placeholder="Leave empty for unlimited"
                         value="<?= htmlspecialchars(isset($event['max_capacity']) && $event['max_capacity'] !== null && $event['max_capacity'] !== '' ? (string)(int)$event['max_capacity'] : '') ?>"
                     >
-                    <small class="text-muted d-block mt-1">Leave empty for no limit. Requires migration <code>school_events_high_value_features.sql</code> for the column.</small>
                 </div>
 
                 <div class="form-group">
@@ -551,6 +708,25 @@ $stmt->close();
                     </a>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Confirm update (yes / no) -->
+    <div class="modal fade" id="confirmUpdateEventModal" tabindex="-1" aria-labelledby="confirmUpdateEventModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="confirmUpdateEventModalLabel"><i class="fas fa-question-circle me-2 text-primary"></i>Update this event?</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-0">Are you sure you want to save these changes? The event will be sent back to the admin for approval before it goes live again.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">No</button>
+                    <button type="button" class="btn btn-primary" id="confirmUpdateEventYesBtn">Yes, update event</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -601,53 +777,71 @@ $stmt->close();
             });
         })();
 
-        document.getElementById('editEventForm').addEventListener('submit', function(e) {
-            const title = document.getElementById('title').value.trim();
-            const date  = document.getElementById('date').value;
-            const loc   = document.getElementById('location').value.trim();
-            const form  = document.getElementById('editEventForm');
-            const allCb = document.getElementById('editDeptAll');
-            const specifics = form ? form.querySelectorAll('.edit-dept-specific') : [];
-            const anySpec = Array.from(specifics).some(function (c) { return c.checked; });
-            const allOn = allCb && allCb.checked;
-            if (!allOn && !anySpec) {
-                e.preventDefault();
-                showMessageModal('Please choose "All departments" or select at least one department.');
-                return false;
+        (function () {
+            var form = document.getElementById('editEventForm');
+            var confirmModalEl = document.getElementById('confirmUpdateEventModal');
+            var confirmYesBtn = document.getElementById('confirmUpdateEventYesBtn');
+            if (!form || !confirmModalEl || !confirmYesBtn || typeof bootstrap === 'undefined' || !bootstrap.Modal) {
+                return;
             }
+            var confirmModal = bootstrap.Modal.getOrCreateInstance(confirmModalEl);
 
-            if (!title) {
+            confirmYesBtn.addEventListener('click', function () {
+                confirmModal.hide();
+                form.submit();
+            });
+
+            form.addEventListener('submit', function(e) {
+                const title = document.getElementById('title').value.trim();
+                const date  = document.getElementById('date').value;
+                const loc   = document.getElementById('location').value.trim();
+                const allCb = document.getElementById('editDeptAll');
+                const specifics = form.querySelectorAll('.edit-dept-specific');
+                const anySpec = Array.from(specifics).some(function (c) { return c.checked; });
+                const allOn = allCb && allCb.checked;
+                if (!allOn && !anySpec) {
+                    e.preventDefault();
+                    showMessageModal('Please choose "All departments" or select at least one department.');
+                    return false;
+                }
+
+                if (!title) {
+                    e.preventDefault();
+                    showMessageModal('Please enter an event title.');
+                    document.getElementById('title').focus();
+                    return false;
+                }
+
+                if (!date) {
+                    e.preventDefault();
+                    showMessageModal('Please select an event date.');
+                    document.getElementById('date').focus();
+                    return false;
+                }
+
+                if (!loc) {
+                    e.preventDefault();
+                    showMessageModal('Please enter an event location.');
+                    document.getElementById('location').focus();
+                    return false;
+                }
+
+                const today    = new Date();
+                today.setHours(0, 0, 0, 0);
+                const eventDate = new Date(date);
+
+                if (eventDate < today) {
+                    e.preventDefault();
+                    showMessageModal('Event date cannot be in the past.');
+                    document.getElementById('date').focus();
+                    return false;
+                }
+
                 e.preventDefault();
-                showMessageModal('Please enter an event title.');
-                document.getElementById('title').focus();
+                confirmModal.show();
                 return false;
-            }
-
-            if (!date) {
-                e.preventDefault();
-                showMessageModal('Please select an event date.');
-                document.getElementById('date').focus();
-                return false;
-            }
-
-            if (!loc) {
-                e.preventDefault();
-                showMessageModal('Please enter an event location.');
-                document.getElementById('location').focus();
-                return false;
-            }
-
-            const today    = new Date();
-            today.setHours(0, 0, 0, 0);
-            const eventDate = new Date(date);
-
-            if (eventDate < today) {
-                e.preventDefault();
-                showMessageModal('Event date cannot be in the past.');
-                document.getElementById('date').focus();
-                return false;
-            }
-        });
+            });
+        })();
     </script>
 </body>
 </html>

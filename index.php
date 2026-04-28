@@ -6,6 +6,7 @@ $checkin_token = trim($_GET['t'] ?? '');
 $auth_modal = trim((string)($_GET['auth_modal'] ?? ''));
 $auth_error = trim((string)($_GET['auth_error'] ?? ''));
 $auth_success = trim((string)($_GET['auth_success'] ?? ''));
+$auth_redirect = trim((string)($_GET['redirect'] ?? ''));
 $studentCourseOptions = [];
 $studentYearLevelOptions = [];
 try {
@@ -160,6 +161,25 @@ try {
     $publicPastList = [];
 }
 
+if ($checkin_token !== '') {
+    $scheme = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? 'https' : 'http';
+    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    $checkin_redirect = $scheme . '://' . $host . BASE_URL . '/checkin.php?t=' . urlencode($checkin_token);
+
+    // Enforce login step for QR attendance flow.
+    if (isset($_SESSION['user_id']) || isset($_SESSION['role'])) {
+        $_SESSION = [];
+        if (ini_get('session.use_cookies')) {
+            $params = session_get_cookie_params();
+            setcookie(session_name(), '', time() - 42000, $params['path'], $params['domain'], $params['secure'], $params['httponly']);
+        }
+        session_destroy();
+    }
+
+    header('Location: ' . BASE_URL . '/views/login.php?redirect=' . urlencode($checkin_redirect));
+    exit();
+}
+
 if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
     // Enforce password change before dashboard access if flagged.
     try {
@@ -186,11 +206,6 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
         }
     } catch (Throwable $e) {
         // ignore and continue default routing
-    }
-    // Logged-in student with check-in token: send straight to check-in
-    if ($_SESSION['role'] === 'student' && $checkin_token !== '') {
-        header("Location: " . BASE_URL . "/checkin.php?t=" . urlencode($checkin_token));
-        exit();
     }
     switch ($_SESSION['role']) {
         case 'super_admin':
@@ -483,6 +498,9 @@ $landing_past_n = count($publicPastList);
             <form id="loginModalForm" action="<?= BASE_URL ?>/backend/auth/auth.php" method="POST" class="auth-form-wrap">
                 <?= csrf_field() ?>
                 <input type="hidden" name="action" value="login">
+                <?php if ($auth_redirect !== ''): ?>
+                    <input type="hidden" name="redirect" value="<?= htmlspecialchars($auth_redirect, ENT_QUOTES, 'UTF-8') ?>">
+                <?php endif; ?>
                 <div class="auth-input-wrap">
                     <label class="auth-label" for="loginModalEmail">Email</label>
                     <input type="email" name="email" id="loginModalEmail" class="auth-input" placeholder="you@example.com" required>

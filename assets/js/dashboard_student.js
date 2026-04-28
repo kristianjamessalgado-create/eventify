@@ -16,6 +16,8 @@ document.addEventListener('DOMContentLoaded', function() {
     initScanQRModal();
     initStudentUpcomingEventClicks();
     initUrgentFeedbackPrompt();
+    initCancelRsvpConfirmModal();
+    initClearNotificationsConfirmModal();
 });
 
 function jumpStudentCalendarToToday(options) {
@@ -120,6 +122,64 @@ function initStudentSettings() {
     }
 }
 
+function initCancelRsvpConfirmModal() {
+    if (typeof bootstrap === 'undefined' || !bootstrap.Modal) return;
+    var modalEl = document.getElementById('cancelRsvpConfirmModal');
+    var yesBtn = document.getElementById('cancelRsvpConfirmYesBtn');
+    if (!modalEl || !yesBtn) return;
+
+    var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    var pendingForm = null;
+
+    document.addEventListener('submit', function (e) {
+        var form = e.target;
+        if (!(form instanceof HTMLFormElement)) return;
+        if (!form.classList.contains('js-cancel-rsvp-form')) return;
+        e.preventDefault();
+        pendingForm = form;
+        modal.show();
+    });
+
+    yesBtn.addEventListener('click', function () {
+        if (!pendingForm) return;
+        modal.hide();
+        pendingForm.submit();
+        pendingForm = null;
+    });
+
+    modalEl.addEventListener('hidden.bs.modal', function () {
+        pendingForm = null;
+    });
+}
+
+function initClearNotificationsConfirmModal() {
+    if (typeof bootstrap === 'undefined' || !bootstrap.Modal) return;
+    var modalEl = document.getElementById('clearNotificationsConfirmModal');
+    var yesBtn = document.getElementById('clearNotificationsConfirmYesBtn');
+    if (!modalEl || !yesBtn) return;
+
+    var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    var targetHref = '';
+
+    document.addEventListener('click', function (e) {
+        var link = e.target.closest('.js-clear-notifications-link');
+        if (!link) return;
+        e.preventDefault();
+        targetHref = link.getAttribute('href') || '';
+        modal.show();
+    });
+
+    yesBtn.addEventListener('click', function () {
+        if (!targetHref) return;
+        modal.hide();
+        window.location.href = targetHref;
+    });
+
+    modalEl.addEventListener('hidden.bs.modal', function () {
+        targetHref = '';
+    });
+}
+
 // ===============================
 // SCAN QR FOR ATTENDANCE
 // ===============================
@@ -133,8 +193,28 @@ function initScanQRModal() {
 
     let stream = null;
     let scanAnimationId = null;
+    let startTimeoutId = null;
+    let hasCameraStarted = false;
+    let readyPollId = null;
+
+    function clearStartTimeout() {
+        if (startTimeoutId != null) {
+            clearTimeout(startTimeoutId);
+            startTimeoutId = null;
+        }
+    }
+
+    function clearReadyPoll() {
+        if (readyPollId != null) {
+            clearInterval(readyPollId);
+            readyPollId = null;
+        }
+    }
 
     function stopCamera() {
+        clearStartTimeout();
+        clearReadyPoll();
+        hasCameraStarted = false;
         if (stream) {
             stream.getTracks().forEach(function(t) { t.stop(); });
             stream = null;
@@ -151,7 +231,7 @@ function initScanQRModal() {
     function parseCheckinTokenFromUrl(urlString) {
         try {
             var url = new URL(urlString);
-            return url.searchParams.get('t') || null;
+            return url.searchParams.get('t') || url.searchParams.get('token') || null;
         } catch (e) {
             return null;
         }
@@ -205,21 +285,55 @@ function initScanQRModal() {
         placeholderEl.innerHTML = '<span><i class="fas fa-camera fa-2x mb-2 d-block"></i>Starting camera…</span>';
         placeholderEl.style.display = 'flex';
         videoEl.style.display = 'none';
+        statusEl.textContent = 'Requesting camera permission...';
+        clearStartTimeout();
+        hasCameraStarted = false;
+        startTimeoutId = setTimeout(function () {
+            if (hasCameraStarted) return;
+            statusEl.innerHTML = 'Camera is taking too long to start. Tap <strong>Close</strong>, allow camera permission, then try again. ' +
+                'If your phone blocks this page camera, use your phone camera app to scan the QR.';
+        }, 9000);
         var constraints = { video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 480 } } };
         getCameraStream(constraints).then(function(mediaStream) {
             stream = mediaStream;
             videoEl.srcObject = stream;
             videoEl.setAttribute('playsinline', true);
-            videoEl.play().then(function() {
+            videoEl.setAttribute('autoplay', 'autoplay');
+            // Desktop browsers can show live video while playback events are delayed.
+            // Hide the startup overlay immediately once stream access is granted.
+            placeholderEl.style.display = 'none';
+            videoEl.style.display = 'block';
+            statusEl.textContent = 'Position the event QR code within the frame.';
+            var onReady = function () {
+                if (hasCameraStarted) return;
+                hasCameraStarted = true;
+                clearStartTimeout();
+                clearReadyPoll();
                 placeholderEl.style.display = 'none';
                 videoEl.style.display = 'block';
                 statusEl.textContent = 'Position the event QR code within the frame.';
                 tick();
-            }).catch(function() {
+            };
+            videoEl.onloadedmetadata = onReady;
+            videoEl.onloadeddata = onReady;
+            videoEl.oncanplay = onReady;
+            videoEl.onplaying = onReady;
+            clearReadyPoll();
+            readyPollId = setInterval(function () {
+                if (!videoEl) return;
+                if (videoEl.readyState >= 2 && videoEl.videoWidth > 0 && videoEl.videoHeight > 0) {
+                    onReady();
+                }
+            }, 220);
+            videoEl.play().then(onReady).catch(function() {
+                clearStartTimeout();
+                clearReadyPoll();
                 statusEl.textContent = 'Could not start video.';
                 placeholderEl.style.display = 'none';
             });
         }).catch(function(err) {
+            clearStartTimeout();
+            clearReadyPoll();
             placeholderEl.innerHTML = '<span><i class="fas fa-video-slash fa-2x mb-2 d-block"></i>Camera not available here</span>';
             placeholderEl.style.display = 'flex';
             statusEl.innerHTML = 'Camera access needs <strong>HTTPS</strong> or is blocked in this browser. <br class="d-none d-md-inline">' +
@@ -269,7 +383,7 @@ function initMobileSidebar() {
     if (toggle) {
         toggle.addEventListener('click', function () {
             if (isMobileView()) {
-                openSidebar();
+                document.body.classList.toggle('student-sidebar-open');
                 return;
             }
             // Desktop: use the same icon to collapse/expand sidebar.
@@ -423,13 +537,20 @@ function initFullCalendar() {
         ? String(settings.default_calendar_view)
         : 'dayGridMonth';
 
+    var rawStudentEvents = Array.isArray(window.studentEvents) ? window.studentEvents : [];
+    var studentCalendarEvents = rawStudentEvents.filter(function (ev) {
+        var props = ev.extendedProps || {};
+        var st = String(props.status != null ? props.status : (ev.status || '')).toLowerCase().trim();
+        return st !== 'rejected';
+    });
+
     calendar = new FullCalendar.Calendar(calendarEl, {
         initialView: defaultView,
         initialDate: currentDate,
         selectable: false, // Students can't create events
         dayMaxEvents: true,
         headerToolbar: false, // We use custom controls
-        events: window.studentEvents || [],
+        events: studentCalendarEvents,
         eventDisplay: 'block',
         height: 'auto',
         contentHeight: 'auto',
@@ -592,7 +713,7 @@ function showStudentEventDetails(eventLike) {
         if (isRegistered) {
             actionHtml = '<p class="mb-2 text-success small"><i class="fas fa-check-circle me-1"></i>You are registered for this event.</p>';
             if (eventId && csrf) {
-                actionHtml += '<form method="post" action="' + escapeHtmlStudent(base + '/backend/auth/cancel_event_rsvp.php') + '" class="mt-2" onsubmit="return confirm(\'Cancel your RSVP for this event?\');">' +
+                actionHtml += '<form method="post" action="' + escapeHtmlStudent(base + '/backend/auth/cancel_event_rsvp.php') + '" class="mt-2 js-cancel-rsvp-form">' +
                     '<input type="hidden" name="csrf_token" value="' + escapeHtmlStudent(csrf) + '">' +
                     '<input type="hidden" name="event_id" value="' + escapeHtmlStudent(String(eventId)) + '">' +
                     '<button type="submit" class="btn btn-outline-danger btn-sm"><i class="fas fa-user-minus me-1"></i>Cancel RSVP</button>' +
@@ -611,9 +732,10 @@ function showStudentEventDetails(eventLike) {
         }
     } else if (attended) {
         if (!hasFeedback && eventId && csrf) {
+            var fbRad = 'fbvis_' + String(eventId).replace(/\W/g, '');
             actionHtml = '<hr class="my-3">' +
-                '<h6 class="small text-uppercase text-muted mb-2">Post-event feedback (anonymous)</h6>' +
-                '<p class="small text-muted mb-2">You checked in to this event. Your rating and comments are shared with organizers <strong>without your name</strong>.</p>' +
+                '<h6 class="small text-uppercase text-muted mb-2">Post-event feedback</h6>' +
+                '<p class="small text-muted mb-2">You checked in to this event. Choose whether the organizer and admin see your <strong>name</strong> with your rating and comment.</p>' +
                 '<form method="post" action="' + escapeHtmlStudent(base + '/backend/auth/submit_event_feedback.php') + '">' +
                 '<input type="hidden" name="csrf_token" value="' + escapeHtmlStudent(csrf) + '">' +
                 '<input type="hidden" name="event_id" value="' + escapeHtmlStudent(String(eventId)) + '">' +
@@ -631,10 +753,20 @@ function showStudentEventDetails(eventLike) {
                 '<label class="form-label small">Comments (optional)</label>' +
                 '<textarea name="comment" class="form-control form-control-sm" rows="3" maxlength="2000" placeholder="How was the event? Suggestions?"></textarea>' +
                 '</div>' +
-                '<button type="submit" class="btn btn-outline-primary btn-sm">Submit anonymous feedback</button>' +
+                '<div class="mb-2">' +
+                '<span class="form-label small d-block">Visibility</span>' +
+                '<div class="form-check">' +
+                '<input class="form-check-input" type="radio" name="feedback_visibility" id="' + fbRad + '_anon" value="anonymous" checked>' +
+                '<label class="form-check-label small" for="' + fbRad + '_anon">Anonymous — name hidden from organizer and admin</label>' +
+                '</div>' +
+                '<div class="form-check">' +
+                '<input class="form-check-input" type="radio" name="feedback_visibility" id="' + fbRad + '_named" value="named">' +
+                '<label class="form-check-label small" for="' + fbRad + '_named">Show my name — organizer and admin may see my name with this feedback</label>' +
+                '</div></div>' +
+                '<button type="submit" class="btn btn-outline-primary btn-sm">Submit feedback</button>' +
                 '</form>';
         } else if (hasFeedback) {
-            actionHtml = '<p class="mb-0 small text-muted mt-2"><i class="fas fa-check me-1"></i>Thanks — you already submitted anonymous feedback for this event.</p>';
+            actionHtml = '<p class="mb-0 small text-muted mt-2"><i class="fas fa-check me-1"></i>Thanks — you already submitted feedback for this event.</p>';
         }
     } else {
         actionHtml = '<p class="mb-0 small text-muted">This event is finished or was marked ended by the organizer. <strong>Post-event feedback</strong> is only available if you attended using <strong>QR check-in</strong>.</p>';
@@ -718,7 +850,7 @@ function initUrgentFeedbackPrompt() {
 
     var body = document.getElementById('studentUrgentFeedbackModalBody');
     if (body) {
-        var html = '<p class="mb-3 fw-semibold">You attended the event(s) below. Anonymous feedback is requested while it is still fresh.</p>' +
+        var html = '<p class="mb-3 fw-semibold">You attended the event(s) below. Please share feedback while it is still fresh — you can choose anonymous or named when you submit.</p>' +
             '<ul class="list-group list-group-flush">';
         list.forEach(function (ev) {
             var dateLine = '';

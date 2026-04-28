@@ -300,6 +300,52 @@ body, html {
     display: none;
 }
 
+/* Organizer sidebar profile card */
+.organizer-user-card {
+    border-radius: 14px;
+    padding: 18px 16px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.organizer-user-avatar {
+    width: 76px;
+    height: 76px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.8rem;
+    font-weight: 700;
+    overflow: hidden;
+}
+
+.organizer-user-avatar-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+    display: block;
+}
+
+.organizer-user-name {
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.organizer-user-role {
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 4px 10px;
+    border-radius: 999px;
+}
+
 /* Mini Calendar Widget */
 .mini-calendar-widget {
     background: #ffffff;
@@ -1056,191 +1102,440 @@ body, html {
 }
 
 /* ===============================
-   SCHOOL THEME REFRESH (OVERRIDES)
+   ORGANIZER THEME OVERRIDE
+   Match Student dashboard color system
 ================================ */
 :root {
-    --org-school-green-900: #064e3b;
-    --org-school-green-800: #065f46;
-    --org-school-green-700: #047857;
-    --org-school-green-100: #d1fae5;
-    --org-school-gold-600: #ca8a04;
-    --org-school-gold-500: #d4a016;
-    --org-school-gold-100: #fef3c7;
-    --org-ink-900: #0f172a;
-    --org-ink-700: #334155;
-    --org-ink-500: #64748b;
-    --org-surface: #ffffff;
-    --org-surface-soft: #f8faf7;
-    --org-border: #dbe7df;
+    --school-white: #ffffff;
+    --school-cream: #f7f4e7;
+    --school-olive-top: #b7be77;
+    --school-forest-mid: #3f6a2a;
+    --school-forest-deep: #153313;
+    --school-forest-card: #1b4a1b;
+    --school-gold: #e6c54a;
+    --school-gold-dim: #b88f2a;
+    --school-green-bright: #3d8a35;
+    --school-border: rgba(230, 197, 74, 0.42);
+    --school-soft-bg: rgba(27, 74, 27, 0.16);
+    --school-text-on-dark: #ffffff;
+    --school-text-muted: rgba(247, 244, 231, 0.84);
 }
 
-body,
-html {
-    background:
-        radial-gradient(900px 420px at -8% -10%, rgba(6, 95, 70, 0.18), transparent 62%),
-        radial-gradient(950px 380px at 108% -5%, rgba(202, 138, 4, 0.13), transparent 64%),
-        #f3f8f5;
-    color: var(--org-ink-900);
+body, html {
+    background: linear-gradient(180deg, var(--school-olive-top) 0%, var(--school-forest-mid) 42%, var(--school-forest-deep) 100%);
+    background-attachment: fixed;
+    min-height: 100%;
 }
 
 .top-navbar {
-    background: linear-gradient(90deg, rgba(6, 78, 59, 0.97), rgba(6, 95, 70, 0.95));
-    border-bottom: 1px solid rgba(212, 160, 22, 0.45);
-    box-shadow: 0 10px 25px rgba(2, 44, 34, 0.28);
+    background: linear-gradient(180deg, var(--school-forest-card) 0%, #021a08 100%);
+    border-bottom: 3px solid var(--school-gold);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
 }
 
-.brand-logo,
-.brand-logo span {
-    color: #f8fafc;
-    letter-spacing: 0.02em;
+.brand-logo {
+    color: var(--school-text-on-dark);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
 }
 
 .brand-logo i {
-    color: #facc15;
+    color: var(--school-gold);
 }
 
 .nav-btn {
-    color: #d1fae5;
-    border: 1px solid transparent;
+    color: var(--school-text-muted);
 }
 
 .nav-btn:hover {
-    background: rgba(250, 204, 21, 0.18);
-    border-color: rgba(250, 204, 21, 0.32);
-    color: #fef9c3;
+    background: rgba(249, 237, 0, 0.18);
+    color: var(--school-gold);
 }
 
 .create-btn {
-    background: linear-gradient(135deg, var(--org-school-gold-500), var(--org-school-gold-600)) !important;
-    color: #1f2937 !important;
+    background: linear-gradient(180deg, var(--school-gold) 0%, var(--school-gold-dim) 100%) !important;
+    color: var(--school-forest-card) !important;
+    border: 1px solid rgba(1, 50, 32, 0.25) !important;
 }
 
 .create-btn:hover {
-    background: linear-gradient(135deg, #eab308, #b45309) !important;
-    color: #111827 !important;
+    background: var(--school-gold) !important;
+    color: var(--school-forest-deep) !important;
+}
+
+.profile-avatar {
+    background: linear-gradient(135deg, var(--school-green-bright) 0%, #0d4d24 100%);
+    border: 2px solid rgba(249, 237, 0, 0.45);
 }
 
 .sidebar {
-    background: linear-gradient(180deg, #ffffff, #f7fbf8);
-    border-right: 1px solid var(--org-border);
-    box-shadow: 8px 0 24px rgba(6, 78, 59, 0.08);
+    background: linear-gradient(180deg, rgba(1, 50, 32, 0.94) 0%, rgba(3, 40, 2, 0.97) 100%);
+    border-right: 2px solid var(--school-border);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
-.mini-calendar-widget,
-.action-btn,
-.calendars-search input {
-    border-color: var(--org-border);
+.organizer-user-card {
+    background: linear-gradient(135deg, #2f6626 0%, var(--school-forest-card) 60%, #143a13 100%);
+    border: 2px solid var(--school-gold);
+    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.28);
+}
+
+.organizer-user-avatar {
+    background: linear-gradient(135deg, var(--school-gold) 0%, var(--school-gold-dim) 100%);
+    color: var(--school-forest-card);
+    border: 2px solid rgba(27, 74, 27, 0.35);
+}
+
+.organizer-user-name {
+    color: var(--school-text-on-dark);
+}
+
+.organizer-user-role {
+    color: var(--school-forest-card);
+    background: var(--school-gold);
+    border: 1px solid rgba(27, 74, 27, 0.25);
+}
+
+.sidebar .section-title,
+.sidebar .calendars-title {
+    color: var(--school-gold);
+    letter-spacing: 0.12em;
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
+}
+
+.sidebar .mini-cal-month,
+.sidebar .calendar-name {
+    color: var(--school-text-on-dark);
+}
+
+.sidebar .mini-cal-day {
+    color: var(--school-text-muted);
+}
+
+.sidebar .mini-cal-day-header {
+    color: rgba(249, 237, 0, 0.75);
+}
+
+.sidebar .mini-cal-day:hover,
+.sidebar .calendar-item:hover {
+    background: rgba(249, 237, 0, 0.12);
+}
+
+.sidebar .mini-cal-day.today {
+    background: var(--school-gold);
+    color: var(--school-forest-card);
 }
 
 .mini-calendar-widget {
-    background: var(--org-surface);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 5px 16px rgba(15, 23, 42, 0.04);
-}
-
-.mini-cal-month,
-.calendar-name,
-.calendar-title {
-    color: var(--org-ink-900);
-}
-
-.mini-cal-day.today {
-    background: var(--org-school-green-700);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--school-border);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
 }
 
 .mini-cal-day.selected {
-    background: rgba(6, 95, 70, 0.14);
-    color: var(--org-school-green-800);
-    outline-color: rgba(6, 95, 70, 0.45);
+    background: rgba(249, 237, 0, 0.25);
+    color: var(--school-gold);
+    font-weight: 700;
+    outline: 1px solid var(--school-gold);
+}
+
+.calendars-search input {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--school-text-on-dark);
+    border-color: rgba(249, 237, 0, 0.28);
+}
+
+.calendars-search i {
+    color: rgba(249, 237, 0, 0.8);
 }
 
 .calendars-search input:focus {
-    border-color: var(--org-school-green-700);
-    box-shadow: 0 0 0 3px rgba(6, 95, 70, 0.12);
+    border-color: var(--school-gold);
+    box-shadow: 0 0 0 3px rgba(249, 237, 0, 0.2);
 }
 
 .calendar-item.active {
-    background: linear-gradient(135deg, var(--org-school-green-800), var(--org-school-green-700));
+    background: var(--school-gold);
+    color: var(--school-forest-card);
 }
 
-.section-title,
-.calendars-title {
-    color: var(--org-ink-500);
+.calendar-item.active .calendar-name,
+.calendar-item.active i {
+    color: var(--school-forest-card);
 }
 
 .action-btn {
-    background: #ffffff;
-    color: var(--org-ink-900);
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(249, 237, 0, 0.28);
+    color: var(--school-text-on-dark);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 .action-btn:hover {
-    background: #f0fdf4;
-    border-color: #b7dcc6;
+    background: rgba(249, 237, 0, 0.16);
+    border-color: var(--school-gold);
+    color: var(--school-gold);
+    transform: translateY(-2px);
+    box-shadow: 0 10px 18px rgba(0, 0, 0, 0.25);
+}
+
+.action-btn i {
+    color: var(--school-gold);
+}
+
+/* Keep external quick-action links (e.g., Messages) from reverting to default link colors */
+.quick-actions a.action-btn,
+.quick-actions a.action-btn:link,
+.quick-actions a.action-btn:visited,
+.quick-actions a.action-btn.text-reset,
+.quick-actions a.action-btn.text-reset:visited {
+    color: var(--school-text-on-dark) !important;
+}
+
+.quick-actions a.action-btn:hover,
+.quick-actions a.action-btn:focus {
+    color: var(--school-gold) !important;
+}
+
+.action-btn.logout-btn {
+    color: #fecaca;
+    border-color: rgba(248, 113, 113, 0.45);
+}
+
+.action-btn.logout-btn:hover {
+    background: rgba(127, 29, 29, 0.35);
+    border-color: #f87171;
 }
 
 .main-content {
-    background: var(--org-surface);
-    border-left: 1px solid var(--org-border);
-    box-shadow: -4px 0 18px rgba(6, 78, 59, 0.06);
+    background: linear-gradient(180deg, #ffffff 0%, var(--school-cream) 100%);
+    border-left: 2px solid var(--school-border);
+    box-shadow: -6px 0 32px rgba(0, 0, 0, 0.2);
 }
 
 .calendar-controls {
-    background: linear-gradient(180deg, #f8fdf9, #f3faf5);
-    border-bottom: 1px solid var(--org-border);
+    background: var(--school-gold) !important;
+    border: 2px solid rgba(1, 50, 32, 0.2) !important;
+    border-radius: 0;
+}
+
+.calendar-title {
+    color: var(--school-forest-card) !important;
+    font-weight: 800;
 }
 
 .control-nav,
 .view-btn {
-    border-color: #cfe0d7;
-    background: #ffffff;
-    color: var(--org-ink-700);
+    background: rgba(255, 255, 255, 0.55);
+    border-color: var(--school-forest-card) !important;
+    color: var(--school-forest-card);
 }
 
 .control-nav:hover,
 .view-btn:hover {
-    border-color: #9fc7b4;
-    background: #f0fdf4;
-    color: var(--org-school-green-800);
+    background: #ffffff;
+    border-color: var(--school-forest-deep) !important;
+    color: var(--school-forest-deep);
 }
 
 .view-btn.active {
-    background: linear-gradient(135deg, var(--org-school-green-800), var(--org-school-green-700));
-    border-color: var(--org-school-green-700);
-    color: #ffffff;
-    box-shadow: 0 10px 24px rgba(6, 95, 70, 0.28);
+    background: var(--school-forest-card) !important;
+    border-color: var(--school-forest-card) !important;
+    color: var(--school-gold) !important;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
 }
 
 #calendar {
-    border: 1px solid var(--org-border);
-    border-radius: 12px;
-    overflow: hidden;
+    border: 2px solid rgba(1, 50, 32, 0.25);
+    border-radius: 0;
+    padding: 10px;
+    background: #ffffff !important;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
 }
 
 .fc-col-header-cell {
-    background: #f7fcf9 !important;
+    background: var(--school-gold) !important;
+    border-bottom: 2px solid var(--school-forest-card) !important;
+}
+
+.fc-col-header-cell-cushion {
+    color: var(--school-forest-card) !important;
+    font-weight: 800 !important;
+}
+
+.fc-daygrid-day:hover {
+    background: rgba(249, 237, 0, 0.12) !important;
+    box-shadow: inset 0 0 0 1px rgba(249, 237, 0, 0.45);
 }
 
 .fc-day-today {
-    background-color: #ecfdf5 !important;
+    background-color: rgba(249, 237, 0, 0.35) !important;
 }
 
 .fc-day-today .fc-daygrid-day-number {
-    color: var(--org-school-green-800) !important;
+    color: var(--school-forest-card) !important;
+    font-weight: 800 !important;
+}
+
+.fc-day-other .fc-daygrid-day-frame {
+    background: var(--school-soft-bg) !important;
+}
+
+.fc-event {
+    border-radius: 9px !important;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.16) !important;
 }
 
 .fc-event[data-event-state="active"] {
-    background-color: var(--org-school-green-700) !important;
+    background-color: var(--school-forest-card) !important;
+    color: var(--school-white) !important;
+    border: 1px solid rgba(249, 237, 0, 0.35) !important;
 }
 
 .fc-event[data-event-state="upcoming"] {
-    background-color: var(--org-school-gold-500) !important;
-    color: #1f2937 !important;
+    background-color: var(--school-gold) !important;
+    color: var(--school-forest-card) !important;
+}
+
+.fc-event[data-event-state="closed"] {
+    background-color: #4b5563 !important;
 }
 
 .fc-more-link {
-    color: var(--org-school-green-700) !important;
+    color: var(--school-forest-card) !important;
+    font-weight: 700 !important;
+}
+
+.fc-more-link:hover {
+    background: rgba(249, 237, 0, 0.35) !important;
 }
 
 .modal-content {
-    border: 1px solid #d6e7de;
+    border: 1px solid rgba(1, 50, 32, 0.2);
     box-shadow: 0 20px 40px rgba(15, 23, 42, 0.14);
+}
+
+/* My Events modal: align with school olive/forest/gold palette */
+#eventsModal .modal-content {
+    background: linear-gradient(180deg, #ffffff 0%, var(--school-cream) 100%);
+    border: 2px solid var(--school-border);
+}
+
+#eventsModal .modal-header {
+    background: linear-gradient(180deg, var(--school-forest-card) 0%, #102f10 100%);
+    border-bottom: 2px solid var(--school-gold);
+}
+
+#eventsModal .modal-title {
+    color: var(--school-text-on-dark);
+    font-weight: 700;
+}
+
+#eventsModal .btn-close {
+    filter: invert(1) brightness(1.3);
+}
+
+#eventsModal .modal-body {
+    background: transparent;
+}
+
+#eventsModal .event-item {
+    background: #ffffff;
+    border: 1px solid rgba(1, 50, 32, 0.18);
+}
+
+#eventsModal .event-item:hover {
+    border-color: rgba(230, 197, 74, 0.55);
+}
+
+#eventsModal .event-title {
+    color: var(--school-forest-card);
+}
+
+#eventsModal .event-meta {
+    color: #4b5563;
+}
+
+#eventsModal .event-meta i {
+    color: var(--school-forest-card);
+}
+
+#eventsModal .modal-footer {
+    border-top: 1px solid rgba(1, 50, 32, 0.15);
+    background: rgba(247, 244, 231, 0.65);
+}
+
+#eventsModal .btn-primary {
+    background: linear-gradient(180deg, var(--school-forest-card) 0%, var(--school-forest-deep) 100%);
+    border: 2px solid var(--school-gold);
+    color: var(--school-gold);
+}
+
+#eventsModal .btn-primary:hover {
+    color: #fff7a8;
+    border-color: #fff7a8;
+}
+
+#eventsModal .btn-outline-primary,
+#eventsModal .btn-outline-secondary,
+#eventsModal .btn-outline-info,
+#eventsModal .btn-outline-success {
+    border-color: rgba(1, 50, 32, 0.35);
+    color: var(--school-forest-card);
+    background: rgba(255, 255, 255, 0.92);
+}
+
+#eventsModal .btn-outline-primary:hover,
+#eventsModal .btn-outline-secondary:hover,
+#eventsModal .btn-outline-info:hover,
+#eventsModal .btn-outline-success:hover {
+    background: rgba(230, 197, 74, 0.28);
+    border-color: var(--school-forest-card);
+    color: var(--school-forest-card);
+}
+
+/* ===============================
+   LANDING-STYLE SHIMMER CTA
+   Mirrors index.css Get Started sweep
+================================ */
+.create-btn,
+.btn-primary,
+.view-btn.active,
+.action-btn:not(.logout-btn) {
+    position: relative;
+    overflow: hidden;
+}
+
+.create-btn::after,
+.btn-primary::after,
+.view-btn.active::after,
+.action-btn:not(.logout-btn)::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(
+        105deg,
+        transparent 0%,
+        transparent 38%,
+        rgba(255, 255, 255, 0.3) 50%,
+        transparent 62%,
+        transparent 100%
+    );
+    transform: translateX(-120%);
+    animation: dashboardShimmer 3.4s ease-in-out infinite;
+    pointer-events: none;
+}
+
+@keyframes dashboardShimmer {
+    0%, 18% { transform: translateX(-120%); }
+    40%, 100% { transform: translateX(120%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .create-btn::after,
+    .btn-primary::after,
+    .view-btn.active::after,
+    .action-btn:not(.logout-btn)::after {
+        animation: none;
+    }
 }

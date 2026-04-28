@@ -19,6 +19,7 @@ $upcomingAdminCount  = isset($upcomingAdminCount) ? (int) $upcomingAdminCount : 
 $admin_notifications = $admin_notifications ?? [];
 $admin_unread_count = isset($admin_unread_count) ? (int) $admin_unread_count : 0;
 $feedbackStats = $feedbackStats ?? ['total_feedback' => 0, 'avg_rating' => 0, 'rating_labels' => ['1★','2★','3★','4★','5★'], 'rating_counts' => [0,0,0,0,0]];
+$admin_feedback_list = $admin_feedback_list ?? [];
 $success       = $_GET['success'] ?? '';
 $error         = $_GET['error'] ?? '';
 $openModal     = strtolower((string)($_GET['open_modal'] ?? ''));
@@ -37,7 +38,7 @@ $messengerHref = BASE_URL . '/backend/messaging/staff_messenger.php';
     <link rel="stylesheet" href="<?= BASE_URL; ?>/assets/css/dashboard_student.css">
     <link rel="stylesheet" href="<?= BASE_URL; ?>/assets/css/dashboard_admin.css">
 </head>
-<body>
+<body class="admin-dashboard">
 
 <nav class="adm-navbar">
     <div class="d-flex align-items-center">
@@ -109,7 +110,12 @@ $messengerHref = BASE_URL . '/backend/messaging/staff_messenger.php';
             <h3 class="section-title">QUICK ACTIONS</h3>
             <button type="button" class="action-btn w-100 text-start border-0 bg-transparent" data-bs-toggle="modal" data-bs-target="#pendingEventsModal">
                 <i class="fas fa-inbox"></i>
-                <span>Pending Events <?= $pendingCount > 0 ? '(' . (int)$pendingCount . ')' : '' ?></span>
+                <span>Pending Events</span>
+                <?php if ($pendingCount > 0): ?>
+                    <span class="admin-pending-badge" aria-label="<?= (int)$pendingCount ?> pending events">
+                        <?= (int)$pendingCount ?>
+                    </span>
+                <?php endif; ?>
                 <i class="fas fa-chevron-right ms-auto"></i>
             </button>
             <button type="button" class="action-btn w-100 text-start border-0 bg-transparent" data-bs-toggle="modal" data-bs-target="#adminUpcomingEventsModal">
@@ -122,6 +128,14 @@ $messengerHref = BASE_URL . '/backend/messaging/staff_messenger.php';
                 <span>Messages<?= $staff_messaging_unread > 0 ? ' (' . $staff_messaging_unread . ')' : '' ?></span>
                 <i class="fas fa-chevron-right ms-auto"></i>
             </a>
+            <button type="button" class="action-btn w-100 text-start border-0 bg-transparent" data-bs-toggle="modal" data-bs-target="#adminStudentFeedbackModal">
+                <i class="fas fa-star-half-stroke"></i>
+                <span>Student feedback</span>
+                <?php if (!empty($admin_feedback_list)): ?>
+                    <span class="badge bg-success ms-1"><?= count($admin_feedback_list) > 99 ? '99+' : count($admin_feedback_list) ?></span>
+                <?php endif; ?>
+                <i class="fas fa-chevron-right ms-auto"></i>
+            </button>
             <button type="button" class="action-btn w-100 text-start border-0 bg-transparent" data-bs-toggle="modal" data-bs-target="#auditLogModal">
                 <i class="fas fa-clipboard-list"></i>
                 <span>Audit log</span>
@@ -613,6 +627,60 @@ $messengerHref = BASE_URL . '/backend/messaging/staff_messenger.php';
             </tbody>
           </table>
         </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Student feedback (post-event ratings from attendees) -->
+<div class="modal fade" id="adminStudentFeedbackModal" tabindex="-1" aria-labelledby="adminStudentFeedbackModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="adminStudentFeedbackModalLabel"><i class="fas fa-star-half-stroke me-2 text-warning"></i>Student feedback</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small mb-3">From students who attended (QR check-in). Names appear only when the student chose to share them.</p>
+        <?php if (!empty($admin_feedback_list)): ?>
+          <ul class="list-unstyled mb-0 small" style="max-height: min(60vh, 420px); overflow-y: auto;">
+            <?php foreach ($admin_feedback_list as $fc): ?>
+              <?php
+                $anon = !isset($fc['is_anonymous']) || (int) $fc['is_anonymous'] === 1;
+                $who = $anon ? 'Anonymous' : trim((string)($fc['student_name'] ?? ''));
+                if (!$anon && $who === '') {
+                    $who = 'Student';
+                }
+                $code = $anon ? '' : trim((string)($fc['student_code'] ?? ''));
+              ?>
+              <li class="border rounded p-2 mb-2 bg-light">
+                <div class="d-flex flex-wrap justify-content-between gap-2 mb-1">
+                  <span class="fw-semibold"><?= htmlspecialchars((string)($fc['event_title'] ?? 'Event')) ?></span>
+                  <span class="text-warning text-nowrap"><i class="fas fa-star me-1"></i><?= (int)($fc['rating'] ?? 0) ?>/5</span>
+                </div>
+                <div class="text-muted small mb-1">
+                  <?= date('M j, Y g:i A', strtotime($fc['created_at'] ?? 'now')) ?>
+                  · Organizer: <?= htmlspecialchars((string)($fc['organizer_name'] ?? '—')) ?>
+                  <?php if ($anon): ?>
+                    · <span class="badge bg-secondary">Anonymous</span>
+                  <?php else: ?>
+                    · <span class="badge bg-success"><?= htmlspecialchars($who) ?><?= $code !== '' ? ' · ' . htmlspecialchars($code) : '' ?></span>
+                  <?php endif; ?>
+                </div>
+                <?php if (trim((string)($fc['comment'] ?? '')) !== ''): ?>
+                  <div><?= nl2br(htmlspecialchars((string)($fc['comment'] ?? ''))) ?></div>
+                <?php else: ?>
+                  <div class="text-muted fst-italic">(No comment)</div>
+                <?php endif; ?>
+              </li>
+            <?php endforeach; ?>
+          </ul>
+        <?php else: ?>
+          <p class="mb-0 text-muted small">No feedback entries yet.</p>
+        <?php endif; ?>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>

@@ -279,7 +279,6 @@ $upcoming_events = array_values(array_filter($events ?? [], function ($e) use ($
             <span><i class="fas fa-circle text-success me-1"></i>Active</span>
             <span><i class="fas fa-circle text-warning me-1"></i>Upcoming</span>
             <span><i class="fas fa-circle text-secondary me-1"></i>Closed/Completed</span>
-            <span><i class="fas fa-circle text-danger me-1"></i>Rejected</span>
         </div>
 
         <!-- FullCalendar Container -->
@@ -770,7 +769,7 @@ window.__studentPendingUrgentFeedback = <?= json_encode($pending_urgent_feedback
         <a href="<?= BASE_URL ?>/backend/auth/mark_notification_read.php?mark_all=1" class="btn btn-outline-secondary btn-sm" id="studentNotificationsMarkAllLink">
           <i class="fas fa-check-double me-1"></i> Mark all read
         </a>
-        <a href="<?= BASE_URL ?>/backend/auth/mark_notification_read.php?clear_all=1" class="btn btn-outline-danger btn-sm" onclick="return confirm('Clear all notifications? This cannot be undone.');">
+        <a href="<?= BASE_URL ?>/backend/auth/mark_notification_read.php?clear_all=1" class="btn btn-outline-danger btn-sm js-clear-notifications-link">
           <i class="fas fa-trash me-1"></i> Clear all
         </a>
         <button type="button" class="btn btn-outline-primary btn-sm" id="studentOpenUpcomingFromNotifBtn">
@@ -866,7 +865,7 @@ window.__studentPendingUrgentFeedback = <?= json_encode($pending_urgent_feedback
         <a href="<?= BASE_URL ?>/backend/auth/mark_notification_read.php?mark_all=1" class="btn btn-outline-secondary btn-sm">
           <i class="fas fa-check-double me-1"></i> Mark all read
         </a>
-        <a href="<?= BASE_URL ?>/backend/auth/mark_notification_read.php?clear_all=1" class="btn btn-outline-danger btn-sm" onclick="return confirm('Clear all notifications? This cannot be undone.');">
+        <a href="<?= BASE_URL ?>/backend/auth/mark_notification_read.php?clear_all=1" class="btn btn-outline-danger btn-sm js-clear-notifications-link">
           <i class="fas fa-trash me-1"></i> Clear all
         </a>
         <button type="button" class="btn btn-outline-primary btn-sm" id="studentOpenNotificationsFromUpcomingBtn">
@@ -892,7 +891,7 @@ window.__studentPendingUrgentFeedback = <?= json_encode($pending_urgent_feedback
         <div id="scanQRVideoContainer" class="position-relative bg-dark rounded overflow-hidden" style="min-height: 260px;">
           <video id="scanQRVideo" playsinline muted style="width:100%; height:auto; display:block;"></video>
           <canvas id="scanQRCanvas" style="display:none;"></canvas>
-          <div id="scanQRPlaceholder" class="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center text-white">
+          <div id="scanQRPlaceholder" class="position-absolute top-0 start-0 w-100 h-100 text-white" style="display:flex; align-items:center; justify-content:center;">
             <span><i class="fas fa-camera fa-2x mb-2 d-block"></i>Starting camera…</span>
           </div>
         </div>
@@ -900,6 +899,25 @@ window.__studentPendingUrgentFeedback = <?= json_encode($pending_urgent_feedback
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Clear Notifications -->
+<div class="modal fade" id="clearNotificationsConfirmModal" tabindex="-1" aria-labelledby="clearNotificationsConfirmModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="clearNotificationsConfirmModalLabel"><i class="fas fa-trash me-2 text-danger"></i>Clear all notifications</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        Are you sure you want to clear all notifications? This cannot be undone.
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-danger" id="clearNotificationsConfirmYesBtn">Yes, clear all</button>
       </div>
     </div>
   </div>
@@ -1008,6 +1026,25 @@ window.__studentPendingUrgentFeedback = <?= json_encode($pending_urgent_feedback
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Cancel RSVP Confirmation Modal -->
+<div class="modal fade" id="cancelRsvpConfirmModal" tabindex="-1" aria-labelledby="cancelRsvpConfirmModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="cancelRsvpConfirmModalLabel"><i class="fas fa-user-minus me-2 text-danger"></i>Cancel RSVP</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        Are you sure you want to cancel your RSVP for this event?
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">No</button>
+        <button type="button" class="btn btn-danger" id="cancelRsvpConfirmYesBtn">Yes, cancel RSVP</button>
       </div>
     </div>
   </div>

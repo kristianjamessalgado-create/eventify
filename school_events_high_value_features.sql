@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS `event_feedback` (
   `user_id` int(11) NOT NULL,
   `rating` tinyint(3) UNSIGNED NOT NULL,
   `comment` text DEFAULT NULL,
+  `is_anonymous` tinyint(1) NOT NULL DEFAULT 1,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`id`),
   UNIQUE KEY `uniq_event_user_feedback` (`event_id`,`user_id`),

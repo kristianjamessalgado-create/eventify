@@ -8,6 +8,7 @@ include __DIR__ . '/../../config/config.php';
 include __DIR__ . '/../../config/csrf.php';
 require_once __DIR__ . '/../lib/event_status_auto.php';
 require_once __DIR__ . '/../lib/staff_messaging.php';
+require_once __DIR__ . '/../lib/event_feedback_schema.php';
 
 // Only admin users can access this dashboard
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
@@ -288,6 +289,32 @@ try {
     }
 } catch (Throwable $e) {
     // Keep dashboard available even when event_feedback is not migrated.
+}
+
+// Recent student feedback (all events) for admin review
+$admin_feedback_list = [];
+try {
+    if (eventify_event_feedback_ensure_schema($conn)) {
+        $fbStmt = $conn->query("
+            SELECT ef.rating, ef.comment, ef.created_at, ef.is_anonymous,
+                   e.title AS event_title, e.id AS event_id,
+                   org.name AS organizer_name,
+                   u.name AS student_name, u.user_id AS student_code
+            FROM event_feedback ef
+            JOIN events e ON e.id = ef.event_id
+            JOIN users org ON org.id = e.organizer_id
+            LEFT JOIN users u ON u.id = ef.user_id
+            ORDER BY ef.created_at DESC
+            LIMIT 100
+        ");
+        if ($fbStmt) {
+            while ($row = $fbStmt->fetch_assoc()) {
+                $admin_feedback_list[] = $row;
+            }
+        }
+    }
+} catch (Throwable $e) {
+    $admin_feedback_list = [];
 }
 
 // Admin ↔ Organizer messaging (organizer list + unread count)

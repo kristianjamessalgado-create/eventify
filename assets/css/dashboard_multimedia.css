@@ -81,6 +81,36 @@ body {
     z-index: 2;
 }
 
+.navbar-left {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.nav-btn {
+    width: 40px;
+    height: 40px;
+    border: none;
+    background: transparent;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: rgba(255, 255, 255, 0.82);
+    transition: all 0.2s ease;
+    text-decoration: none;
+}
+
+.sidebar-toggle-mobile {
+    display: inline-flex;
+}
+
+.nav-btn:hover {
+    background: rgba(249, 237, 0, 0.16);
+    color: var(--mm-gold);
+}
+
 .brand-logo {
     display: flex;
     align-items: center;
@@ -126,8 +156,39 @@ body {
 .dashboard-layout {
     display: flex;
     min-height: calc(100vh - 56px);
-    padding: 1rem;
+    padding: 0 1rem 1rem;
     gap: 1rem;
+    position: relative;
+}
+
+.dashboard-layout,
+.dashboard-layout .sidebar,
+.dashboard-layout .main-content {
+    margin-top: 0 !important;
+}
+
+@media (min-width: 769px) {
+    .sidebar {
+        transition: width 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+                    min-width 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+                    padding-left 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+                    padding-right 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+                    opacity 0.22s ease,
+                    border-color 0.22s ease,
+                    box-shadow 0.22s ease;
+    }
+
+    body.mm-sidebar-collapsed .sidebar {
+        width: 0 !important;
+        min-width: 0 !important;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+        border-color: transparent !important;
+        box-shadow: none !important;
+        opacity: 0;
+        overflow: hidden;
+        pointer-events: none;
+    }
 }
 
 .sidebar {
@@ -1134,14 +1195,41 @@ button.action-btn:focus-visible {
     .photo-viewer-img {
         max-height: 80vh;
     }
-    .dashboard-layout { flex-direction: column; padding: 0.75rem; }
+    .dashboard-layout { flex-direction: row; padding: 0 0.75rem 0.75rem; min-height: calc(100vh - 64px); }
+    .sidebar-backdrop {
+        position: fixed;
+        inset: 64px 0 0 0;
+        background: rgba(2, 6, 23, 0.45);
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transition: opacity 0.22s ease, visibility 0.22s ease;
+        z-index: 990;
+    }
+    body.mm-sidebar-open .sidebar-backdrop {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+    }
+    body.mm-sidebar-open {
+        overflow: hidden;
+    }
     .sidebar {
-        width: 100%;
+        position: fixed;
+        top: 64px;
+        left: 0;
+        bottom: 0;
+        transform: translateX(-100%);
+        transition: transform 0.22s ease;
+        width: min(88vw, 320px);
+        max-width: 320px;
         min-width: 0;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 1rem;
+        z-index: 1001;
+        overflow-y: auto;
         padding: 1rem;
+    }
+    body.mm-sidebar-open .sidebar {
+        transform: translateX(0);
     }
     .main-content { padding: 1rem; }
     .content-header-top { flex-direction: column; align-items: flex-start; }
@@ -1263,18 +1351,18 @@ button.action-btn:focus-visible {
    Olive → forest gradient, poster gold #f9ed00, deep greens
 ================================ */
 :root {
-    --mm-olive-top: #7a8d3b;
-    --mm-forest-mid: #164a1a;
-    --mm-forest-deep: #032802;
-    --mm-forest-card: #013220;
-    --mm-gold: #f9ed00;
-    --mm-gold-dim: #d4c400;
-    --mm-cream: #fafdf8;
+    --mm-olive-top: #b7be77;
+    --mm-forest-mid: #3f6a2a;
+    --mm-forest-deep: #153313;
+    --mm-forest-card: #1b4a1b;
+    --mm-gold: #e6c54a;
+    --mm-gold-dim: #b88f2a;
+    --mm-cream: #f7f4e7;
     --mm-white: #ffffff;
-    --mm-border-gold: rgba(249, 237, 0, 0.35);
-    --mm-accent: #15803d;
-    --mm-accent-hover: #166534;
-    --mm-soft-bg: rgba(1, 50, 32, 0.08);
+    --mm-border-gold: rgba(230, 197, 74, 0.42);
+    --mm-accent: #3d8a35;
+    --mm-accent-hover: #2f6f2a;
+    --mm-soft-bg: rgba(27, 74, 27, 0.16);
 }
 
 body {
@@ -1552,4 +1640,51 @@ button.action-btn:focus-visible {
 .modal-footer .btn-primary:hover {
     color: #fff7a8;
     border-color: #fff7a8;
+}
+
+/* ===============================
+   LANDING-STYLE SHIMMER CTA
+   Mirrors index.css Get Started sweep
+================================ */
+.btn-primary,
+.btn-upload,
+.event-actions .btn,
+.action-btn:not(.logout-btn) {
+    position: relative;
+    overflow: hidden;
+}
+
+.btn-primary::after,
+.btn-upload::after,
+.event-actions .btn::after,
+.action-btn:not(.logout-btn)::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(
+        105deg,
+        transparent 0%,
+        transparent 38%,
+        rgba(255, 255, 255, 0.3) 50%,
+        transparent 62%,
+        transparent 100%
+    );
+    transform: translateX(-120%);
+    animation: dashboardShimmer 3.4s ease-in-out infinite;
+    pointer-events: none;
+}
+
+@keyframes dashboardShimmer {
+    0%, 18% { transform: translateX(-120%); }
+    40%, 100% { transform: translateX(120%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .btn-primary::after,
+    .btn-upload::after,
+    .event-actions .btn::after,
+    .action-btn:not(.logout-btn)::after {
+        animation: none;
+    }
 }

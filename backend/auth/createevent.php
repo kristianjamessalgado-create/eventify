@@ -509,9 +509,117 @@ $pageDeptCheckboxState = eventify_organizer_department_form_checkbox_state(
                 flex-direction: column;
             }
         }
+
+        /* Theme override: match organizer dashboard palette */
+        :root {
+            --school-cream: #f7f4e7;
+            --school-olive-top: #b7be77;
+            --school-forest-mid: #3f6a2a;
+            --school-forest-deep: #153313;
+            --school-forest-card: #1b4a1b;
+            --school-gold: #e6c54a;
+            --school-gold-dim: #b88f2a;
+            --school-border: rgba(230, 197, 74, 0.42);
+        }
+
+        body {
+            background: linear-gradient(180deg, var(--school-olive-top) 0%, var(--school-forest-mid) 42%, var(--school-forest-deep) 100%);
+            background-attachment: fixed;
+        }
+
+        .create-event-container {
+            background: linear-gradient(180deg, #ffffff 0%, var(--school-cream) 100%);
+            border: 2px solid var(--school-border);
+            box-shadow: 0 14px 36px rgba(0,0,0,0.35);
+        }
+
+        .create-event-header {
+            background: linear-gradient(180deg, var(--school-forest-card) 0%, #021a08 100%);
+            border-bottom: 3px solid var(--school-gold);
+        }
+
+        .create-event-header .header-actions {
+            margin-top: 0.9rem;
+            display: flex;
+            justify-content: center;
+        }
+
+        .create-event-header .header-back-link {
+            color: var(--school-forest-card);
+            background: var(--school-gold);
+            border: 1px solid rgba(1, 50, 32, 0.32);
+            border-radius: 999px;
+            padding: 0.4rem 0.85rem;
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 0.85rem;
+        }
+
+        .create-event-header .header-back-link:hover {
+            background: #f3da78;
+            color: var(--school-forest-card);
+        }
+
+        .form-control:focus {
+            border-color: var(--school-gold-dim);
+            box-shadow: 0 0 0 3px rgba(230, 197, 74, 0.25);
+        }
+
+        .btn-primary {
+            background: linear-gradient(180deg, var(--school-forest-card) 0%, var(--school-forest-deep) 100%);
+            color: var(--school-gold);
+            border: 2px solid var(--school-gold);
+        }
+
+        .btn-primary:hover {
+            color: #fff7a8;
+            border-color: #fff7a8;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.28);
+        }
+
+        .btn-secondary {
+            background: rgba(255,255,255,0.85);
+            color: var(--school-forest-card);
+            border: 1px solid rgba(1, 50, 32, 0.28);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(230, 197, 74, 0.2);
+            border-color: var(--school-forest-card);
+        }
+
+        .back-link {
+            color: var(--school-forest-card);
+            background: var(--school-gold);
+            border: 2px solid rgba(1, 50, 32, 0.35);
+            border-radius: 999px;
+            padding: 0.5rem 1rem;
+            font-weight: 700;
+            font-size: 0.95rem;
+            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.2);
+        }
+
+        .back-link:hover {
+            color: var(--school-forest-card);
+            background: #f3da78;
+            border-color: var(--school-gold-dim);
+            transform: translateY(-1px);
+        }
+
+        .page-back-wrap {
+            max-width: 700px;
+            margin: 0 auto 14px;
+            display: flex;
+            justify-content: flex-start;
+        }
     </style>
 </head>
 <body>
+    <div class="page-back-wrap">
+        <a href="<?= BASE_URL ?>/backend/auth/dashboardorganizer.php" class="back-link">
+            <i class="fas fa-arrow-left"></i> Back to Dashboard
+        </a>
+    </div>
     <div class="create-event-container">
         <div class="create-event-header">
             <h1><i class="fas fa-calendar-plus"></i> Create New Event</h1>
@@ -519,10 +627,6 @@ $pageDeptCheckboxState = eventify_organizer_department_form_checkbox_state(
         </div>
         
         <div class="create-event-body">
-            <a href="<?= BASE_URL ?>/backend/auth/dashboardorganizer.php" class="back-link">
-                <i class="fas fa-arrow-left"></i> Back to Dashboard
-            </a>
-            
             <?php if ($error): ?>
                 <div class="alert alert-danger">
                     <i class="fas fa-exclamation-circle"></i> <?= htmlspecialchars($error) ?>
@@ -694,10 +798,10 @@ $pageDeptCheckboxState = eventify_organizer_department_form_checkbox_state(
                 </div>
                 
                 <div class="btn-group">
-                    <button type="submit" class="btn btn-primary">
+                    <button type="button" class="btn btn-primary" id="createEventSubmitBtn">
                         <i class="fas fa-check"></i> Create Event
                     </button>
-                    <a href="<?= BASE_URL ?>/backend/auth/dashboardorganizer.php" class="btn btn-secondary">
+                    <a href="<?= BASE_URL ?>/backend/auth/dashboardorganizer.php" class="btn btn-secondary" id="createEventCancelLink">
                         <i class="fas fa-times"></i> Cancel
                     </a>
                 </div>
@@ -723,6 +827,25 @@ $pageDeptCheckboxState = eventify_organizer_department_form_checkbox_state(
         </div>
     </div>
 
+    <!-- Confirm Create/Cancel Modal -->
+    <div class="modal fade" id="confirmActionModal" tabindex="-1" aria-labelledby="confirmActionModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="confirmActionModalLabel"><i class="fas fa-circle-question me-2"></i>Confirm Action</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p id="confirmActionModalBody" class="mb-0">Are you sure you want to continue?</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">No</button>
+                    <button type="button" class="btn btn-primary" id="confirmActionYesBtn">Yes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
@@ -740,6 +863,54 @@ $pageDeptCheckboxState = eventify_organizer_department_form_checkbox_state(
 
         document.addEventListener('DOMContentLoaded', function () {
             var cform = document.getElementById('createEventForm');
+            var submitBtn = document.getElementById('createEventSubmitBtn');
+            var cancelLink = document.getElementById('createEventCancelLink');
+            var confirmModalEl = document.getElementById('confirmActionModal');
+            var confirmBodyEl = document.getElementById('confirmActionModalBody');
+            var confirmYesBtn = document.getElementById('confirmActionYesBtn');
+            var confirmModal = null;
+            var pendingAction = null; // { type: 'submit' } or { type: 'cancel', href: '...' }
+
+            if (confirmModalEl && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                confirmModal = bootstrap.Modal.getOrCreateInstance(confirmModalEl);
+            }
+
+            if (submitBtn && cform && confirmModal) {
+                submitBtn.addEventListener('click', function () {
+                    pendingAction = { type: 'submit' };
+                    if (confirmBodyEl) confirmBodyEl.textContent = 'Are you sure you want to create this event?';
+                    confirmModal.show();
+                });
+            }
+
+            if (cancelLink && confirmModal) {
+                cancelLink.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    pendingAction = { type: 'cancel', href: cancelLink.getAttribute('href') || '' };
+                    if (confirmBodyEl) confirmBodyEl.textContent = 'Are you sure you want to cancel? Unsaved changes will be lost.';
+                    confirmModal.show();
+                });
+            }
+
+            if (confirmYesBtn) {
+                confirmYesBtn.addEventListener('click', function () {
+                    if (!pendingAction) return;
+                    if (confirmModal) confirmModal.hide();
+                    if (pendingAction.type === 'submit' && cform) {
+                        cform.requestSubmit();
+                    } else if (pendingAction.type === 'cancel' && pendingAction.href) {
+                        window.location.href = pendingAction.href;
+                    }
+                    pendingAction = null;
+                });
+            }
+
+            if (confirmModalEl) {
+                confirmModalEl.addEventListener('hidden.bs.modal', function () {
+                    pendingAction = null;
+                });
+            }
+
             if (cform) {
                 var allD = document.getElementById('standaloneDeptAll');
                 var specsD = cform.querySelectorAll('.standalone-dept-specific');

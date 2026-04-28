@@ -23,7 +23,7 @@ if ($event_id < 1) {
     exit();
 }
 
-$eStmt = $conn->prepare("SELECT id, title, date FROM events WHERE id = ? LIMIT 1");
+$eStmt = $conn->prepare("SELECT id, title, date, organizer_id FROM events WHERE id = ? LIMIT 1");
 $eStmt->bind_param("i", $event_id);
 $eStmt->execute();
 $event = $eStmt->get_result()->fetch_assoc();
@@ -50,12 +50,23 @@ $dStmt->close();
 if ($deleted) {
     try {
         $title = (string) ($event['title'] ?? 'this event');
+        $organizerId = (int)($event['organizer_id'] ?? 0);
+        $studentName = (string)($_SESSION['name'] ?? 'A student');
         $n = $conn->prepare("INSERT INTO notifications (user_id, type, title, message, event_id) VALUES (?, 'rsvp_cancelled', 'RSVP cancelled', ?, ?)");
         if ($n) {
             $nMsg = 'You cancelled your RSVP for "' . $title . '".';
             $n->bind_param("isi", $user_id, $nMsg, $event_id);
             $n->execute();
             $n->close();
+        }
+        if ($organizerId > 0) {
+            $orgNotif = $conn->prepare("INSERT INTO notifications (user_id, type, title, message, event_id) VALUES (?, 'event_rsvp_cancelled', 'RSVP cancelled', ?, ?)");
+            if ($orgNotif) {
+                $orgMsg = $studentName . ' cancelled RSVP for "' . $title . '".';
+                $orgNotif->bind_param("isi", $organizerId, $orgMsg, $event_id);
+                $orgNotif->execute();
+                $orgNotif->close();
+            }
         }
     } catch (Throwable $e) {
         // ignore notifications failures

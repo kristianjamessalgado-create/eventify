@@ -15,6 +15,7 @@ $event = null;
 $geo_required = false;
 $eventHasGeo = false;
 $geo_radius_m = 300.0; // Allowed check-in radius from event pin
+$focus_confirm_mobile = false;
 
 function eventify_haversine_m(float $lat1, float $lon1, float $lat2, float $lon2): float
 {
@@ -41,9 +42,9 @@ if ($token === '') {
     }
 
     if ($eventHasGeo) {
-        $stmt = $conn->prepare("SELECT id, title, date, start_time, end_time, location, status, checkin_token, latitude, longitude FROM events WHERE checkin_token = ?");
+        $stmt = $conn->prepare("SELECT id, title, organizer_id, date, start_time, end_time, location, status, checkin_token, latitude, longitude FROM events WHERE checkin_token = ?");
     } else {
-        $stmt = $conn->prepare("SELECT id, title, date, start_time, end_time, location, status, checkin_token FROM events WHERE checkin_token = ?");
+        $stmt = $conn->prepare("SELECT id, title, organizer_id, date, start_time, end_time, location, status, checkin_token FROM events WHERE checkin_token = ?");
     }
     $stmt->bind_param("s", $token);
     $stmt->execute();
@@ -78,6 +79,7 @@ if (!$error && $event && $_SERVER['REQUEST_METHOD'] !== 'POST') {
         $chk->store_result();
         $already_done = $chk->num_rows > 0;
         $chk->close();
+        $focus_confirm_mobile = !$already_done;
     }
 }
 
@@ -185,6 +187,24 @@ if (!$error && $event && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['
 
             $conn->commit();
             $confirmed = true;
+
+            // Notify organizer after successful attendance confirmation.
+            try {
+                $organizerId = (int)($event['organizer_id'] ?? 0);
+                if ($organizerId > 0) {
+                    $studentName = (string)($_SESSION['name'] ?? 'A student');
+                    $eventTitle = (string)($event['title'] ?? 'your event');
+                    $n = $conn->prepare("INSERT INTO notifications (user_id, type, title, message, event_id) VALUES (?, 'event_attendance_confirmed', 'Attendance confirmed', ?, ?)");
+                    if ($n) {
+                        $nMsg = $studentName . ' confirmed attendance for "' . $eventTitle . '".';
+                        $n->bind_param("isi", $organizerId, $nMsg, $event_id);
+                        $n->execute();
+                        $n->close();
+                    }
+                }
+            } catch (Throwable $e) {
+                // Ignore notification failures so attendance still succeeds.
+            }
         } catch (Throwable $txe) {
             try { $conn->rollback(); } catch (Throwable $e2) {}
             if ($txe->getMessage() === 'This device already checked in another account for this event.') {
@@ -210,13 +230,86 @@ $pageTitle = $event ? htmlspecialchars($event['title']) : 'Event Check-in';
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        body { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 1rem; }
-        .checkin-card { max-width: 420px; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
-        .checkin-header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; padding: 1.5rem; border-radius: 16px 16px 0 0; text-align: center; }
-        .checkin-body { padding: 1.5rem; background: #fff; border-radius: 0 0 16px 16px; }
-        .event-meta { color: #6c757d; font-size: 0.9rem; margin-bottom: 0.5rem; }
-        .btn-confirm { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; border: none; padding: 0.75rem 1.5rem; font-weight: 600; border-radius: 10px; }
-        .btn-confirm:hover { color: #fff; opacity: 0.95; }
+        :root {
+            --school-white: #ffffff;
+            --school-cream: #f7f4e7;
+            --school-olive-top: #b7be77;
+            --school-forest-mid: #3f6a2a;
+            --school-forest-deep: #153313;
+            --school-forest-card: #1b4a1b;
+            --school-gold: #e6c54a;
+            --school-gold-dim: #b88f2a;
+            --school-border: rgba(230, 197, 74, 0.42);
+        }
+
+        body {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(180deg, var(--school-olive-top) 0%, var(--school-forest-mid) 42%, var(--school-forest-deep) 100%);
+            background-attachment: fixed;
+            padding: 1rem;
+            color: #1f2937;
+        }
+
+        .checkin-card {
+            width: 100%;
+            max-width: 460px;
+            border-radius: 18px;
+            border: 2px solid var(--school-border);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+            overflow: hidden;
+        }
+
+        .checkin-header {
+            background: linear-gradient(180deg, var(--school-forest-card) 0%, #021a08 100%);
+            color: var(--school-white);
+            border-bottom: 3px solid var(--school-gold);
+            padding: 1.2rem 1.25rem;
+            text-align: center;
+        }
+
+        .checkin-body {
+            padding: 1.25rem;
+            background: linear-gradient(180deg, #ffffff 0%, var(--school-cream) 100%);
+        }
+
+        .checkin-body h5 {
+            color: var(--school-forest-card);
+            font-weight: 800;
+        }
+
+        .event-meta {
+            color: #4b5563;
+            font-size: 0.92rem;
+            margin-bottom: 0.45rem;
+        }
+
+        .event-meta i {
+            color: var(--school-forest-card);
+        }
+
+        .btn-confirm {
+            background: linear-gradient(180deg, var(--school-forest-card) 0%, var(--school-forest-deep) 100%);
+            color: var(--school-gold);
+            border: 2px solid var(--school-gold);
+            padding: 0.75rem 1rem;
+            font-weight: 700;
+            border-radius: 10px;
+        }
+
+        .btn-confirm:hover {
+            color: #fff7a8;
+            border-color: #fff7a8;
+            background: var(--school-forest-deep);
+        }
+
+        @media (max-width: 576px) {
+            .checkin-card { max-width: 100%; border-radius: 14px; }
+            .checkin-header { padding: 1rem; }
+            .checkin-body { padding: 1rem; }
+        }
     </style>
 </head>
 <body>
@@ -274,6 +367,7 @@ $pageTitle = $event ? htmlspecialchars($event['title']) : 'Event Check-in';
         var fHash = document.getElementById('device_hash');
         var confirmBtn = document.getElementById('confirmBtn');
         var geoRequired = <?= json_encode($geo_required) ?>;
+        var focusConfirmMobile = <?= json_encode($focus_confirm_mobile) ?>;
 
         function setCanConfirm(canConfirm) {
           if (!confirmBtn) return;
@@ -327,6 +421,10 @@ $pageTitle = $event ? htmlspecialchars($event['title']) : 'Event Check-in';
           });
         }
 
+        function isMobileView() {
+          return window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
+        }
+
         buildDeviceHash().then(function(h) {
           fHash.value = h || '';
           if (!fHash.value) {
@@ -334,6 +432,14 @@ $pageTitle = $event ? htmlspecialchars($event['title']) : 'Event Check-in';
           }
         });
         setCanConfirm(true);
+        if (geoRequired) requestLocation();
+
+        if (focusConfirmMobile && isMobileView() && confirmBtn) {
+          setTimeout(function () {
+            try { confirmBtn.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {}
+            try { confirmBtn.focus({ preventScroll: true }); } catch (e) {}
+          }, 180);
+        }
 
         form.addEventListener('submit', function(e) {
           if (!fHash.value) {

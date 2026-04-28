@@ -69,14 +69,78 @@ if ($role === 'admin') {
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        body { padding: 2rem; background: #f3f4f6; }
-        .qr-card { max-width: 440px; margin: 0 auto; border-radius: 16px; box-shadow: 0 10px 40px rgba(15,23,42,0.15); overflow: hidden; }
-        .qr-header { background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%); color: #fff; padding: 1.25rem; text-align: center; }
-        .qr-body { padding: 1.5rem; background: #fff; }
-        .qr-body img { display: block; margin: 0 auto 1rem; border: 4px solid #e5e7eb; border-radius: 12px; background:#fff; }
-        .gallery-url { font-size: 0.8rem; word-break: break-all; color: #6b7280; }
-        .event-meta { color: #6b7280; font-size: 0.9rem; }
-        .dept-pill { display:inline-flex; align-items:center; padding:0.22rem 0.55rem; border-radius:999px; font-size:0.75rem; border:1px solid #d1d5db; background:#f9fafb; margin-top:0.35rem;}
+        :root {
+            --school-cream: #f7f4e7;
+            --school-olive-top: #b7be77;
+            --school-forest-mid: #3f6a2a;
+            --school-forest-deep: #153313;
+            --school-forest-card: #1b4a1b;
+            --school-gold: #e6c54a;
+            --school-gold-dim: #b88f2a;
+            --school-border: rgba(230, 197, 74, 0.42);
+        }
+        body {
+            padding: 2rem 1rem;
+            background: linear-gradient(180deg, var(--school-olive-top) 0%, var(--school-forest-mid) 42%, var(--school-forest-deep) 100%);
+            background-attachment: fixed;
+        }
+        .qr-card {
+            max-width: 460px;
+            margin: 0 auto;
+            border-radius: 16px;
+            border: 2px solid var(--school-border);
+            box-shadow: 0 14px 36px rgba(0,0,0,0.32);
+            overflow: hidden;
+        }
+        .qr-header {
+            background: linear-gradient(180deg, var(--school-forest-card) 0%, #021a08 100%);
+            color: #fff;
+            padding: 1.25rem;
+            text-align: center;
+            border-bottom: 3px solid var(--school-gold);
+        }
+        .qr-body {
+            padding: 1.35rem;
+            background: linear-gradient(180deg, #ffffff 0%, var(--school-cream) 100%);
+        }
+        .qr-body h5 { color: var(--school-forest-card); font-weight: 800; }
+        .qr-body img {
+            display: block;
+            margin: 0 auto 1rem;
+            border: 4px solid rgba(1, 50, 32, 0.18);
+            border-radius: 12px;
+            background: #fff;
+        }
+        .gallery-url { font-size: 0.8rem; word-break: break-all; color: #4b5563; }
+        .event-meta { color: #4b5563; font-size: 0.9rem; }
+        .event-meta i { color: var(--school-forest-card); }
+        .dept-pill {
+            display:inline-flex;
+            align-items:center;
+            padding:0.22rem 0.55rem;
+            border-radius:999px;
+            font-size:0.75rem;
+            border:1px solid rgba(1, 50, 32, 0.25);
+            background: rgba(27, 74, 27, 0.08);
+            color: var(--school-forest-card);
+            margin-top:0.35rem;
+            font-weight: 700;
+        }
+        .btn-back-dashboard {
+            background: rgba(255,255,255,0.85);
+            border: 1px solid rgba(1, 50, 32, 0.35);
+            color: var(--school-forest-card);
+        }
+        .btn-back-dashboard:hover {
+            background: rgba(230, 197, 74, 0.22);
+            border-color: var(--school-gold-dim);
+            color: var(--school-forest-card);
+        }
+        @media (max-width: 576px) {
+            body { padding: 1rem 0.6rem; }
+            .qr-body { padding: 1rem; }
+            .qr-body img { width: 260px; height: 260px; }
+        }
     </style>
 </head>
 <body>
@@ -104,7 +168,7 @@ if ($role === 'admin') {
             <p class="small text-muted mb-1">Students scan this QR to open the photo gallery (students only, filtered by department).</p>
             <p class="gallery-url mb-0" title="<?= htmlspecialchars($gallery_url) ?>"><?= htmlspecialchars($gallery_url) ?></p>
             <div class="mt-3">
-                <a href="<?= $back_url ?>" class="btn btn-outline-secondary btn-sm"><i class="fas fa-arrow-left me-1"></i>Back to dashboard</a>
+                <a href="<?= $back_url ?>" class="btn btn-back-dashboard btn-sm"><i class="fas fa-arrow-left me-1"></i>Back to dashboard</a>
             </div>
         </div>
     </div>

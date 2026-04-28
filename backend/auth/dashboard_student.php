@@ -210,6 +210,11 @@ if (!empty($attended_event_ids)) {
     }
 }
 
+// Students should not see rejected events on the calendar (defensive filter after merges)
+$events = array_values(array_filter($events, static function ($row) {
+    return strtolower(trim((string) ($row['status'] ?? ''))) !== 'rejected';
+}));
+
 // RSVP: which events this student is registered for
 $registered_event_ids = [];
 $stmtReg = $conn->prepare("SELECT event_id FROM registrations WHERE user_id = ?");

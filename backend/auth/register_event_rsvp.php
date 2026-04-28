@@ -34,9 +34,9 @@ try {
 
 if ($event_id > 0) {
     if ($eventsHasMaxCapacity) {
-        $stmt = $conn->prepare("SELECT e.id, e.status, e.max_capacity, e.department, u.department AS student_department FROM events e JOIN users u ON u.id = ? WHERE e.id = ?");
+        $stmt = $conn->prepare("SELECT e.id, e.title, e.organizer_id, e.status, e.max_capacity, e.department, u.department AS student_department FROM events e JOIN users u ON u.id = ? WHERE e.id = ?");
     } else {
-        $stmt = $conn->prepare("SELECT e.id, e.status, e.department, u.department AS student_department FROM events e JOIN users u ON u.id = ? WHERE e.id = ?");
+        $stmt = $conn->prepare("SELECT e.id, e.title, e.organizer_id, e.status, e.department, u.department AS student_department FROM events e JOIN users u ON u.id = ? WHERE e.id = ?");
     }
     if (!$stmt) {
         $conn->close();
@@ -87,21 +87,24 @@ if ($event_id > 0) {
                 $msg = 'Successfully registered!';
                 // Student notification copy (for in-app history)
                 try {
-                    $evTitle = '';
-                    $tStmt = $conn->prepare("SELECT title FROM events WHERE id = ? LIMIT 1");
-                    if ($tStmt) {
-                        $tStmt->bind_param("i", $event_id);
-                        $tStmt->execute();
-                        $tStmt->bind_result($evTitle);
-                        $tStmt->fetch();
-                        $tStmt->close();
-                    }
+                    $evTitle = (string)($ev['title'] ?? '');
+                    $organizerId = (int)($ev['organizer_id'] ?? 0);
+                    $studentName = (string)($_SESSION['name'] ?? 'A student');
                     $nt = $conn->prepare("INSERT INTO notifications (user_id, type, title, message, event_id) VALUES (?, 'rsvp_confirmed', 'RSVP confirmed', ?, ?)");
                     if ($nt) {
                         $nMsg = 'You are registered for "' . ($evTitle ?: 'this event') . '".';
                         $nt->bind_param("isi", $user_id, $nMsg, $event_id);
                         $nt->execute();
                         $nt->close();
+                    }
+                    if ($organizerId > 0) {
+                        $orgNotif = $conn->prepare("INSERT INTO notifications (user_id, type, title, message, event_id) VALUES (?, 'event_rsvp_new', 'New RSVP', ?, ?)");
+                        if ($orgNotif) {
+                            $orgMsg = $studentName . ' confirmed RSVP for "' . ($evTitle ?: 'your event') . '".';
+                            $orgNotif->bind_param("isi", $organizerId, $orgMsg, $event_id);
+                            $orgNotif->execute();
+                            $orgNotif->close();
+                        }
                     }
                 } catch (Throwable $e) {
                     // ignore if notifications table is unavailable

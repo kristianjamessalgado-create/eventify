@@ -30,6 +30,9 @@ if (is_array($events)) {
 
 <nav class="top-navbar">
     <div class="navbar-left">
+        <button type="button" class="nav-btn sidebar-toggle-mobile" id="mmSidebarToggle" aria-label="Toggle sidebar" title="Toggle sidebar">
+            <i class="fas fa-bars"></i>
+        </button>
         <div class="brand-logo">
             <i class="fas fa-camera"></i>
             <span>EVENTIFY</span>
@@ -68,7 +71,8 @@ if (is_array($events)) {
 </nav>
 
 <div class="dashboard-layout">
-    <aside class="sidebar">
+    <div class="sidebar-backdrop" id="mmSidebarBackdrop" aria-hidden="true"></div>
+    <aside class="sidebar" id="mmSidebar">
         <div class="sidebar-section">
             <div class="mm-user-card">
                 <div class="mm-user-avatar">
@@ -747,8 +751,30 @@ document.addEventListener('keydown', function(e) {
 
 // Make photos data available to JS
 window.photosByEvent = <?= json_encode($photosByEvent ?? [], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+window.currentMultimediaUserId = <?= (int)($uid ?? 0) ?>;
 
 document.addEventListener('DOMContentLoaded', function() {
+    // Sidebar collapse toggle (desktop + tablet)
+    var mmSidebarToggle = document.getElementById('mmSidebarToggle');
+    var mmSidebarBackdrop = document.getElementById('mmSidebarBackdrop');
+    var isMobileView = function() { return window.matchMedia('(max-width: 768px)').matches; };
+    var closeMmMobileSidebar = function() { document.body.classList.remove('mm-sidebar-open'); };
+    if (mmSidebarToggle) {
+        mmSidebarToggle.addEventListener('click', function() {
+            if (isMobileView()) {
+                document.body.classList.toggle('mm-sidebar-open');
+                return;
+            }
+            document.body.classList.toggle('mm-sidebar-collapsed');
+        });
+    }
+    if (mmSidebarBackdrop) {
+        mmSidebarBackdrop.addEventListener('click', closeMmMobileSidebar);
+    }
+    window.addEventListener('resize', function() {
+        if (!isMobileView()) closeMmMobileSidebar();
+    });
+
     // Client-side search filter (title + location)
     var searchInput = document.getElementById('eventSearchInput');
     var list = document.getElementById('eventsList');
@@ -834,49 +860,53 @@ document.addEventListener('DOMContentLoaded', function() {
                         openPhotoViewer(eventId, index);
                     };
 
-                    var form = document.createElement('form');
-                    form.method = 'POST';
-                    form.action = '<?= BASE_URL ?>/backend/auth/delete_event_photo.php';
-                    form.className = 'delete-photo-form';
-                    form.onclick = function(ev) {
-                        ev.stopPropagation();
-                    };
-
-                    var inputId = document.createElement('input');
-                    inputId.type = 'hidden';
-                    inputId.name = 'photo_id';
-                    inputId.value = photo.id;
-
-                    var inputEvent = document.createElement('input');
-                    inputEvent.type = 'hidden';
-                    inputEvent.name = 'event_id';
-                    inputEvent.value = eventId;
-
-                    var btn = document.createElement('button');
-                    btn.type = 'button';
-                    btn.className = 'btn-delete-photo';
-                    btn.innerHTML = '<i class="fas fa-trash-alt"></i>';
-                    btn.onclick = function (ev) {
-                        ev.stopPropagation();
-                        window.pendingDeletePhotoForm = form;
-                        var modal = new bootstrap.Modal(document.getElementById('deletePhotoModal'));
-                        modal.show();
-                    };
-
-                    var csrfEl = document.getElementById('csrf_token_value');
-                    form.appendChild(inputId);
-                    form.appendChild(inputEvent);
-                    if (csrfEl) {
-                        var inputCsrf = document.createElement('input');
-                        inputCsrf.type = 'hidden';
-                        inputCsrf.name = 'csrf_token';
-                        inputCsrf.value = csrfEl.value;
-                        form.appendChild(inputCsrf);
-                    }
-                    form.appendChild(btn);
-
                     wrapper.appendChild(img);
-                    wrapper.appendChild(form);
+                    var currentUid = parseInt(window.currentMultimediaUserId || '0', 10) || 0;
+                    var photoOwnerId = parseInt(photo.uploaded_by || '0', 10) || 0;
+                    var canDeletePhoto = currentUid > 0 && photoOwnerId === currentUid;
+                    if (canDeletePhoto) {
+                        var form = document.createElement('form');
+                        form.method = 'POST';
+                        form.action = '<?= BASE_URL ?>/backend/auth/delete_event_photo.php';
+                        form.className = 'delete-photo-form';
+                        form.onclick = function(ev) {
+                            ev.stopPropagation();
+                        };
+
+                        var inputId = document.createElement('input');
+                        inputId.type = 'hidden';
+                        inputId.name = 'photo_id';
+                        inputId.value = photo.id;
+
+                        var inputEvent = document.createElement('input');
+                        inputEvent.type = 'hidden';
+                        inputEvent.name = 'event_id';
+                        inputEvent.value = eventId;
+
+                        var btn = document.createElement('button');
+                        btn.type = 'button';
+                        btn.className = 'btn-delete-photo';
+                        btn.innerHTML = '<i class="fas fa-trash-alt"></i>';
+                        btn.onclick = function (ev) {
+                            ev.stopPropagation();
+                            window.pendingDeletePhotoForm = form;
+                            var modal = new bootstrap.Modal(document.getElementById('deletePhotoModal'));
+                            modal.show();
+                        };
+
+                        var csrfEl = document.getElementById('csrf_token_value');
+                        form.appendChild(inputId);
+                        form.appendChild(inputEvent);
+                        if (csrfEl) {
+                            var inputCsrf = document.createElement('input');
+                            inputCsrf.type = 'hidden';
+                            inputCsrf.name = 'csrf_token';
+                            inputCsrf.value = csrfEl.value;
+                            form.appendChild(inputCsrf);
+                        }
+                        form.appendChild(btn);
+                        wrapper.appendChild(form);
+                    }
                     gridEl.appendChild(wrapper);
                 });
             }

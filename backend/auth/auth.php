@@ -290,7 +290,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
 
                     if (!empty($error)) {
-                        header("Location: " . BASE_URL . "/views/login.php?error=" . urlencode($error) . "&form=login");
+                        $retry = BASE_URL . "/views/login.php?error=" . urlencode($error) . "&form=login";
+                        $retryRedirect = trim((string)($_POST['redirect'] ?? ''));
+                        if ($retryRedirect !== '') {
+                            $retry .= "&redirect=" . urlencode($retryRedirect);
+                        }
+                        header("Location: " . $retry);
                         exit();
                     }
 
@@ -316,7 +321,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         // Redirect with error if login failed
         if (!empty($error)) {
-            header("Location: " . BASE_URL . "/views/login.php?error=" . urlencode($error) . "&form=login");
+            $retry = BASE_URL . "/views/login.php?error=" . urlencode($error) . "&form=login";
+            $retryRedirect = trim((string)($_POST['redirect'] ?? ''));
+            if ($retryRedirect !== '') {
+                $retry .= "&redirect=" . urlencode($retryRedirect);
+            }
+            header("Location: " . $retry);
             exit();
         }
     }

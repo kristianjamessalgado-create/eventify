@@ -6,6 +6,7 @@ session_start();
 include __DIR__ . '/../../config/db.php';
 include __DIR__ . '/../../config/config.php';
 include __DIR__ . '/../../config/csrf.php';
+require_once __DIR__ . '/../lib/event_feedback_schema.php';
 
 if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'student') {
     header("Location: " . BASE_URL . "/views/login.php?error=" . urlencode("Access denied"));
@@ -21,6 +22,8 @@ $user_id  = (int) $_SESSION['user_id'];
 $event_id = isset($_POST['event_id']) ? (int) $_POST['event_id'] : 0;
 $rating   = isset($_POST['rating']) ? (int) $_POST['rating'] : 0;
 $comment  = trim($_POST['comment'] ?? '');
+$visibility = strtolower(trim((string)($_POST['feedback_visibility'] ?? 'anonymous')));
+$is_anonymous = ($visibility !== 'named') ? 1 : 0;
 $msg      = 'Invalid feedback.';
 
 if ($event_id < 1 || $rating < 1 || $rating > 5) {
@@ -78,18 +81,43 @@ try {
                         $_SESSION['eventify_feedback_ack'][] = $event_id;
                     }
                 } else {
-                    $ins = $conn->prepare("INSERT INTO event_feedback (event_id, user_id, rating, comment) VALUES (?, ?, ?, ?)");
-                    $ins->bind_param("iiis", $event_id, $user_id, $rating, $comment);
-                    if ($ins->execute()) {
-                        $msg = 'Thank you — your anonymous feedback was saved.';
+                    eventify_event_feedback_ensure_schema($conn);
+                    $hasAnonCol = false;
+                    try {
+                        $chkCol = $conn->query("SHOW COLUMNS FROM event_feedback LIKE 'is_anonymous'");
+                        $hasAnonCol = (bool) ($chkCol && $chkCol->num_rows > 0);
+                    } catch (Throwable $e) {
+                        $hasAnonCol = false;
+                    }
+                    if ($hasAnonCol) {
+                        $ins = $conn->prepare("INSERT INTO event_feedback (event_id, user_id, rating, comment, is_anonymous) VALUES (?, ?, ?, ?, ?)");
+                        if ($ins) {
+                            $ins->bind_param("iiisi", $event_id, $user_id, $rating, $comment, $is_anonymous);
+                        }
+                    } else {
+                        $ins = $conn->prepare("INSERT INTO event_feedback (event_id, user_id, rating, comment) VALUES (?, ?, ?, ?)");
+                        if ($ins) {
+                            $ins->bind_param("iiis", $event_id, $user_id, $rating, $comment);
+                        }
+                    }
+                    if ($ins && $ins->execute()) {
+                        $msg = $hasAnonCol && $is_anonymous
+                            ? 'Thank you — your feedback was saved anonymously.'
+                            : ($hasAnonCol
+                                ? 'Thank you — your feedback was saved. The organizer and admin can see your name with this rating.'
+                                : 'Thank you — your feedback was saved.');
                         $_SESSION['eventify_feedback_ack'] = $_SESSION['eventify_feedback_ack'] ?? [];
                         if (!in_array($event_id, $_SESSION['eventify_feedback_ack'], true)) {
                             $_SESSION['eventify_feedback_ack'][] = $event_id;
                         }
+                    } elseif ($ins) {
+                        $msg = 'Could not save feedback right now. Please try again.';
                     } else {
                         $msg = 'Could not save feedback right now. Please try again.';
                     }
-                    $ins->close();
+                    if ($ins) {
+                        $ins->close();
+                    }
                 }
             }
         }

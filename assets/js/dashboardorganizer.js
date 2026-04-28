@@ -120,6 +120,18 @@ function eventifyFillAndShowEventDetails(event) {
         }
     }
 
+    const otpWrap = document.getElementById('eventOtpVerifyWrap');
+    const otpEventIdInput = document.getElementById('eventOtpEventId');
+    const otpCodeInput = document.getElementById('eventOtpCodeInput');
+    if (otpWrap && otpEventIdInput) {
+        const showOtpVerify = status === 'pending' && !!event.id;
+        otpWrap.style.display = showOtpVerify ? 'block' : 'none';
+        otpEventIdInput.value = showOtpVerify ? String(event.id) : '';
+        if (otpCodeInput) {
+            otpCodeInput.value = '';
+        }
+    }
+
     const rejectWrap = document.getElementById('eventRejectReasonWrap');
     const rejectReasonEl = document.getElementById('eventRejectReason');
     if (rejectWrap && rejectReasonEl) {
@@ -255,7 +267,7 @@ function initOrganizerSidebarToggle() {
     if (toggle) {
         toggle.addEventListener('click', function () {
             if (isMobileView()) {
-                document.body.classList.add('organizer-sidebar-open');
+                document.body.classList.toggle('organizer-sidebar-open');
                 return;
             }
             document.body.classList.toggle('organizer-sidebar-collapsed');

@@ -142,7 +142,7 @@ if (!empty($events)) {
     $placeholders = implode(',', array_fill(0, count($ids), '?'));
     $types = str_repeat('i', count($ids));
 
-    $sql = "SELECT id, event_id, file_path FROM event_photos WHERE event_id IN ($placeholders) ORDER BY created_at DESC, id DESC";
+    $sql = "SELECT id, event_id, file_path, uploaded_by FROM event_photos WHERE event_id IN ($placeholders) ORDER BY created_at DESC, id DESC";
     $stmtPhotos = $conn->prepare($sql);
     if ($stmtPhotos) {
         $stmtPhotos->bind_param($types, ...$ids);
@@ -157,6 +157,7 @@ if (!empty($events)) {
             $photosByEvent[$eid][] = [
                 'id' => (int)$row['id'],
                 'file_path' => $row['file_path'],
+                'uploaded_by' => (int)($row['uploaded_by'] ?? 0),
             ];
         }
         $stmtPhotos->close();

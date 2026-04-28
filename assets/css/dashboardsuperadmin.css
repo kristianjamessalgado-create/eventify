@@ -310,3 +310,47 @@ body {
         gap: 0.25rem;
     }
 }
+
+/* ===============================
+   LANDING-STYLE SHIMMER CTA
+   Mirrors index.css Get Started sweep
+================================ */
+.sa-nav-btn.primary,
+.sa-btn-react,
+.btn-primary {
+    position: relative;
+    overflow: hidden;
+}
+
+.sa-nav-btn.primary::after,
+.sa-btn-react::after,
+.btn-primary::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(
+        105deg,
+        transparent 0%,
+        transparent 38%,
+        rgba(255, 255, 255, 0.3) 50%,
+        transparent 62%,
+        transparent 100%
+    );
+    transform: translateX(-120%);
+    animation: dashboardShimmer 3.4s ease-in-out infinite;
+    pointer-events: none;
+}
+
+@keyframes dashboardShimmer {
+    0%, 18% { transform: translateX(-120%); }
+    40%, 100% { transform: translateX(120%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sa-nav-btn.primary::after,
+    .sa-btn-react::after,
+    .btn-primary::after {
+        animation: none;
+    }
+}

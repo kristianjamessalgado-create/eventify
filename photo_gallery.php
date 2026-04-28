@@ -94,24 +94,64 @@ $pageTitle = $event ? htmlspecialchars($event['title']) . ' – Event Photos' : 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        body { min-height: 100vh; background: #f3f4f6; padding: 1.5rem 0.75rem; }
-        .gallery-card { max-width: 960px; margin: 0 auto; border-radius: 18px; box-shadow: 0 20px 60px rgba(15,23,42,0.15); overflow: hidden; background:#fff; }
-        .gallery-header { padding: 1.5rem 1.75rem; background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%); color: #fff; }
+        :root {
+            --school-cream: #f7f4e7;
+            --school-olive-top: #b7be77;
+            --school-forest-mid: #3f6a2a;
+            --school-forest-deep: #153313;
+            --school-forest-card: #1b4a1b;
+            --school-gold: #e6c54a;
+            --school-gold-dim: #b88f2a;
+            --school-border: rgba(230, 197, 74, 0.42);
+        }
+        body {
+            min-height: 100vh;
+            background: linear-gradient(180deg, var(--school-olive-top) 0%, var(--school-forest-mid) 42%, var(--school-forest-deep) 100%);
+            background-attachment: fixed;
+            padding: 1.5rem 0.75rem;
+        }
+        .gallery-card {
+            max-width: 960px;
+            margin: 0 auto;
+            border-radius: 18px;
+            border: 2px solid var(--school-border);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+            background:#fff;
+        }
+        .gallery-header {
+            padding: 1.5rem 1.75rem;
+            background: linear-gradient(180deg, var(--school-forest-card) 0%, #021a08 100%);
+            border-bottom: 3px solid var(--school-gold);
+            color: #fff;
+        }
         .gallery-header h1 { font-size: 1.4rem; margin:0 0 .25rem 0; display:flex; align-items:center; gap:.5rem; }
-        .gallery-header h1 i { font-size:1.25rem; }
+        .gallery-header h1 i { font-size:1.25rem; color: var(--school-gold); }
         .gallery-subtitle { font-size: .9rem; opacity:.9; margin:0; }
         .event-meta { font-size: .9rem; opacity:.9; margin-top:.35rem; display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; }
-        .pill { display:inline-flex; align-items:center; padding:0.2rem 0.6rem; border-radius:999px; font-size:.75rem; border:1px solid rgba(209,213,219,.85); background:rgba(17,24,39,.16); }
-        .gallery-body { padding: 1.5rem 1.75rem 1.75rem; }
+        .pill { display:inline-flex; align-items:center; padding:0.2rem 0.6rem; border-radius:999px; font-size:.75rem; border:1px solid rgba(230, 197, 74, .58); background:rgba(230, 197, 74, .15); color:#fff; font-weight:700; }
+        .gallery-body { padding: 1.5rem 1.75rem 1.75rem; background: linear-gradient(180deg, #ffffff 0%, var(--school-cream) 100%); }
         .thumb-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:0.75rem; }
-        .thumb { position:relative; border-radius:10px; overflow:hidden; background:#e5e7eb; cursor:pointer; }
+        .thumb { position:relative; border-radius:12px; overflow:hidden; background:#e5e7eb; cursor:pointer; border:1px solid rgba(1, 50, 32, 0.22); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
         .thumb img { width:100%; height:140px; object-fit:cover; display:block; transition:transform .2s ease; }
         .thumb:hover img { transform:scale(1.03); }
+        .thumb:hover { border-color: var(--school-gold-dim); }
         .thumb-overlay { position:absolute; inset:0; background:linear-gradient(to bottom,rgba(0,0,0,0) 40%,rgba(0,0,0,0.45)); display:flex; align-items:flex-end; justify-content:space-between; color:#fff; padding:.4rem .45rem; font-size:.75rem; opacity:0; transition:opacity .2s ease; }
         .thumb:hover .thumb-overlay { opacity:1; }
         .badge-count { background:rgba(0,0,0,0.6); padding:.15rem .45rem; border-radius:999px; font-size:.7rem; }
-        .empty-state { text-align:center; padding:2.5rem 1.5rem; color:#6b7280; }
-        .empty-state i { font-size:2.5rem; margin-bottom:.75rem; opacity:.6; }
+        .empty-state { text-align:center; padding:2.5rem 1.5rem; color:#4b5563; }
+        .empty-state i { font-size:2.5rem; margin-bottom:.75rem; opacity:.75; color: var(--school-forest-card); }
+        .empty-state .btn {
+            background: linear-gradient(180deg, var(--school-forest-card) 0%, var(--school-forest-deep) 100%);
+            border: 2px solid var(--school-gold);
+            color: var(--school-gold);
+            font-weight: 700;
+        }
+        .empty-state .btn:hover {
+            background: var(--school-forest-deep);
+            border-color: #fff7a8;
+            color: var(--school-gold);
+        }
         .footer-note { font-size:.75rem; color:#9ca3af; margin-top:1rem; text-align:right; }
         @media (max-width:768px){ .gallery-header{padding:1.2rem 1.25rem;} .gallery-body{padding:1.25rem;} }
     </style>

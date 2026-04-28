@@ -7,6 +7,7 @@ require_once __DIR__ . '/../../config/organizer_departments.php';
 require_once __DIR__ . '/../../config/departments.php';
 require_once __DIR__ . '/../lib/event_status_auto.php';
 require_once __DIR__ . '/../lib/staff_messaging.php';
+require_once __DIR__ . '/../lib/event_feedback_schema.php';
 
 
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'organizer') {
@@ -153,31 +154,34 @@ try {
     $feedbackStats = ['total_feedback' => 0, 'avg_rating' => 0.0, 'five_star' => 0];
 }
 
-// Recent anonymous comments (no student names) on this organizer's events
-$feedback_comments_anon = [];
+// Student feedback for this organizer's events (rating + optional comment; name shown only if student chose not to be anonymous)
+$organizer_feedback_list = [];
 try {
-    $cStmt = $conn->prepare("
-        SELECT ef.rating, ef.comment, ef.created_at, e.title AS event_title
-        FROM event_feedback ef
-        JOIN events e ON e.id = ef.event_id
-        WHERE e.organizer_id = ?
-          AND ef.comment IS NOT NULL
-          AND TRIM(ef.comment) <> ''
-        ORDER BY ef.created_at DESC
-        LIMIT 35
-    ");
-    if ($cStmt) {
-        $cStmt->bind_param('i', $session_user_id);
-        if ($cStmt->execute()) {
-            $cr = $cStmt->get_result();
-            if ($cr) {
-                $feedback_comments_anon = $cr->fetch_all(MYSQLI_ASSOC);
+    if (eventify_event_feedback_ensure_schema($conn)) {
+        $cStmt = $conn->prepare("
+            SELECT ef.rating, ef.comment, ef.created_at, ef.is_anonymous,
+                   e.title AS event_title,
+                   u.name AS student_name, u.user_id AS student_code
+            FROM event_feedback ef
+            JOIN events e ON e.id = ef.event_id
+            LEFT JOIN users u ON u.id = ef.user_id
+            WHERE e.organizer_id = ?
+            ORDER BY ef.created_at DESC
+            LIMIT 60
+        ");
+        if ($cStmt) {
+            $cStmt->bind_param('i', $session_user_id);
+            if ($cStmt->execute()) {
+                $cr = $cStmt->get_result();
+                if ($cr) {
+                    $organizer_feedback_list = $cr->fetch_all(MYSQLI_ASSOC);
+                }
             }
+            $cStmt->close();
         }
-        $cStmt->close();
     }
 } catch (Throwable $e) {
-    $feedback_comments_anon = [];
+    $organizer_feedback_list = [];
 }
 
 // Fetch unread notifications for organizer (approve/reject etc.)
