@@ -36,12 +36,15 @@ function eventify_auto_complete_past_events(mysqli $conn): void
     try {
         $targetStatus = eventify_events_completed_or_closed_target($conn);
 
-        // End time fallback: if end_time is missing, treat it as 23:59:59 on event date.
+        // End time fallback: use end_date (inclusive last day) when set, else start date.
         $sql = "
             UPDATE events
             SET status = ?
             WHERE status = 'active'
-              AND TIMESTAMP(`date`, COALESCE(NULLIF(end_time, ''), '23:59:59')) < NOW()
+              AND TIMESTAMP(
+                COALESCE(NULLIF(end_date, ''), `date`),
+                COALESCE(NULLIF(end_time, ''), '23:59:59')
+              ) < NOW()
         ";
         $stmt = $conn->prepare($sql);
         if ($stmt) {

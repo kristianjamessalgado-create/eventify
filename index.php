@@ -290,14 +290,22 @@ $landing_past_n = count($publicPastList);
 </header>
 
 <!-- Sections -->
-<section id="public-calendar" class="active reveal-scope in-view">
-    <h1 class="reveal-item" style="--reveal-d: 0ms">Upcoming events calendar</h1>
-    <p class="reveal-item" style="--reveal-d: 70ms">Browse what’s coming up. To view full details and RSVP, you’ll be asked to log in.</p>
-
-    <div class="landing-stat-strip reveal-item" style="--reveal-d: 120ms">
-        <span class="stat-pill" title="Posted events (active or ended) on or after today."><strong><?= (int) $landing_upcoming_n ?></strong> <span class="stat-pill-label">from today</span></span>
-        <span class="stat-pill stat-pill-muted" title="Posted events (active or ended) before today."><strong><?= (int) $landing_past_n ?></strong> <span class="stat-pill-label">earlier</span></span>
-        <span class="stat-pill stat-pill-hint"><i class="fas fa-lock" aria-hidden="true"></i> Log in for details &amp; RSVP</span>
+<section id="public-calendar" class="active reveal-scope in-view" style="--reveal-d: 140ms">
+    <div class="video-hero-container reveal-item" style="--reveal-d: 0ms">
+        <video autoplay muted loop playsinline class="hero-video-bg" aria-hidden="true">
+            <source src="<?= BASE_URL ?>/assets/video/adminv.mov" type="video/quicktime">
+            <source src="<?= BASE_URL ?>/assets/video/adminv.mov" type="video/mp4">
+        </video>
+        <div class="video-overlay-tint"></div>
+        <div class="video-hero-content">
+            <h1>Upcoming events calendar</h1>
+            <p>Browse what’s coming up. To view full details and RSVP, you’ll be asked to log in.</p>
+            <div class="landing-stat-strip">
+                <span class="stat-pill" title="Posted events (active or ended) on or after today."><strong><?= (int) $landing_upcoming_n ?></strong> <span class="stat-pill-label">from today</span></span>
+                <span class="stat-pill stat-pill-muted" title="Posted events (active or ended) before today."><strong><?= (int) $landing_past_n ?></strong> <span class="stat-pill-label">earlier</span></span>
+                <span class="stat-pill stat-pill-hint"><i class="fas fa-lock" aria-hidden="true"></i> Log in for details &amp; RSVP</span>
+            </div>
+        </div>
     </div>
 
     <div class="public-upcoming-wrap reveal-item" style="--reveal-d: 140ms">

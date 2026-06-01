@@ -28,102 +28,104 @@ $error = $error ?? '';
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="<?= BASE_URL; ?>/assets/css/dashboardorganizer.css">
     <link rel="stylesheet" href="<?= BASE_URL; ?>/assets/css/dashboardsuperadmin.css">
 </head>
 <body>
 
-<nav class="sa-navbar">
-    <div class="sa-brand">
-        <i class="fas fa-shield-alt"></i>
-        <span>EVENTIFY</span>
+<nav class="top-navbar">
+    <div class="navbar-left">
+        <button type="button" class="nav-btn sidebar-toggle-mobile" id="saSidebarToggle" aria-label="Toggle menu" title="Menu">
+            <i class="fas fa-bars"></i>
+        </button>
+        <div class="brand-logo">
+            <i class="fas fa-shield-alt"></i>
+            <span>EVENTIFY</span>
+        </div>
     </div>
-    <div class="d-flex align-items-center">
-        <span class="sa-user"><i class="fas fa-user-shield me-1"></i> <?= htmlspecialchars($superadmin_name) ?></span>
-        <a href="#" class="sa-logout" data-bs-toggle="modal" data-bs-target="#logoutModal"><i class="fas fa-sign-out-alt"></i> Logout</a>
+    <div class="navbar-right">
+        <div class="dropdown">
+            <button class="profile-avatar profile-toggle dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="<?= htmlspecialchars($superadmin_name) ?>">
+                <?= strtoupper(substr($superadmin_name, 0, 1)) ?>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end profile-menu">
+                <li class="px-3 py-2">
+                    <div class="small text-muted">Signed in as</div>
+                    <div class="fw-semibold"><?= htmlspecialchars($superadmin_name) ?></div>
+                    <div class="small text-muted mt-1">Super Admin</div>
+                </li>
+                <li><hr class="dropdown-divider"></li>
+                <li>
+                    <a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#usersModal">
+                        <i class="fas fa-users me-2"></i> All Users
+                    </a>
+                </li>
+                <li>
+                    <a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#activityModal">
+                        <i class="fas fa-clipboard-list me-2"></i> Recent Activity
+                    </a>
+                </li>
+                <li><hr class="dropdown-divider"></li>
+                <li>
+                    <a class="dropdown-item text-danger" href="#" data-bs-toggle="modal" data-bs-target="#logoutModal">
+                        <i class="fas fa-sign-out-alt me-2"></i> Logout
+                    </a>
+                </li>
+            </ul>
+        </div>
     </div>
 </nav>
 
-<main class="sa-main">
-    <div class="sa-layout">
-        <!-- Sidebar -->
-        <aside class="sa-sidebar">
-            <div class="sa-sidebar-header">
-                <div class="sa-sidebar-avatar">
-                    <?= strtoupper(substr($superadmin_name, 0, 1)) ?>
-                </div>
-                <div>
-                    <div class="sa-sidebar-name"><?= htmlspecialchars($superadmin_name) ?></div>
-                    <div class="sa-sidebar-role">Super Admin</div>
-                </div>
+<div class="dashboard-layout">
+    <div class="sidebar-backdrop" id="saSidebarBackdrop" aria-hidden="true"></div>
+    <aside class="sidebar" id="saSidebar">
+        <button type="button" class="sidebar-close-mobile" id="saSidebarClose" aria-label="Close menu"><i class="fas fa-times"></i></button>
+        <div class="organizer-user-card">
+            <div class="organizer-user-avatar">
+                <?= strtoupper(substr($superadmin_name, 0, 1)) ?>
             </div>
+            <div class="organizer-user-name"><?= htmlspecialchars($superadmin_name) ?></div>
+            <div class="organizer-user-role">Super Admin</div>
+        </div>
 
-            <div>
-                <div class="sa-nav-group-label">Management</div>
-                <button
-                    type="button"
-                    class="sa-nav-btn primary mb-1"
-                    data-bs-toggle="modal"
-                    data-bs-target="#usersModal"
-                >
-                    <span><i class="fas fa-users me-2"></i>All Users</span>
-                    <i class="fas fa-chevron-right"></i>
-                </button>
-                <button
-                    type="button"
-                    class="sa-nav-btn mb-1"
-                    data-bs-toggle="modal"
-                    data-bs-target="#activityModal"
-                >
-                    <span><i class="fas fa-clipboard-list me-2"></i>Recent Activity</span>
-                    <i class="fas fa-chevron-right"></i>
-                </button>
-                <button
-                    type="button"
-                    class="sa-nav-btn mb-1"
-                    data-bs-toggle="modal"
-                    data-bs-target="#pendingEventsModal"
-                >
-                    <span><i class="fas fa-calendar-check me-2"></i>Pending Events</span>
-                    <i class="fas fa-chevron-right"></i>
-                </button>
-                <button
-                    type="button"
-                    class="sa-nav-btn mb-1"
-                    data-bs-toggle="modal"
-                    data-bs-target="#allEventsModal"
-                >
-                    <span><i class="fas fa-calendar-day me-2"></i>All Events</span>
-                    <i class="fas fa-chevron-right"></i>
-                </button>
-                <button
-                    type="button"
-                    class="sa-nav-btn mb-1"
-                    data-bs-toggle="modal"
-                    data-bs-target="#calendarModal"
-                >
-                    <span><i class="fas fa-calendar-alt me-2"></i>Calendar</span>
-                    <i class="fas fa-chevron-right"></i>
-                </button>
-            </div>
+        <div class="quick-actions">
+            <h3 class="section-title">Management</h3>
+            <button type="button" class="action-btn" data-bs-toggle="modal" data-bs-target="#usersModal">
+                <i class="fas fa-users"></i>
+                <span>All Users</span>
+            </button>
+            <button type="button" class="action-btn" data-bs-toggle="modal" data-bs-target="#activityModal">
+                <i class="fas fa-clipboard-list"></i>
+                <span>Recent Activity</span>
+            </button>
+            <button type="button" class="action-btn" data-bs-toggle="modal" data-bs-target="#pendingEventsModal">
+                <i class="fas fa-calendar-check"></i>
+                <span>Pending Events</span>
+            </button>
+            <button type="button" class="action-btn" data-bs-toggle="modal" data-bs-target="#allEventsModal">
+                <i class="fas fa-calendar-day"></i>
+                <span>All Events</span>
+            </button>
+            <button type="button" class="action-btn" data-bs-toggle="modal" data-bs-target="#calendarModal">
+                <i class="fas fa-calendar-alt"></i>
+                <span>Calendar</span>
+            </button>
+            <button type="button" class="action-btn logout-btn" data-bs-toggle="modal" data-bs-target="#logoutModal">
+                <i class="fas fa-sign-out-alt"></i>
+                <span>Logout</span>
+            </button>
+        </div>
+    </aside>
 
-            <div class="sa-nav-footer">
-                <div>Signed in as <strong><?= htmlspecialchars($superadmin_name) ?></strong></div>
-                <div class="mt-1">Use the menu to manage users, approvals, and view logs.</div>
-            </div>
-        </aside>
-
-        <!-- Main content -->
-        <section class="sa-content">
+    <main class="main-content sa-dashboard-main">
+        <div class="sa-page-header">
+            <h1 class="sa-page-title"><i class="fas fa-gauge-high me-2"></i>Super Admin Dashboard</h1>
+            <p class="sa-page-subtitle mb-0">
+                <i class="fas fa-user-shield me-1"></i>Logged in as <strong><?= htmlspecialchars($superadmin_name) ?></strong>
+            </p>
+        </div>
+        <div class="sa-dashboard-body">
             <div class="sa-card">
-                <div class="sa-card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
-                    <h1 class="mb-0"><i class="fas fa-gauge-high"></i> Super Admin Dashboard</h1>
-                    <span class="text-muted small">
-                        <i class="fas fa-user-shield me-1"></i>Logged in as <strong><?= htmlspecialchars($superadmin_name) ?></strong>
-                    </span>
-                </div>
                 <?php if ($success): ?>
                     <div class="sa-table-wrap">
                         <div class="alert alert-success alert-dismissible fade show sa-alert mt-3" role="alert">
@@ -191,9 +193,9 @@ $error = $error ?? '';
                     </div>
                 </div>
             </div>
-        </section>
-    </div>
-</main>
+        </div>
+    </main>
+</div>
 
 <!-- All Users Modal -->
 <div class="modal fade" id="usersModal" tabindex="-1" aria-labelledby="usersModalLabel" aria-hidden="true">

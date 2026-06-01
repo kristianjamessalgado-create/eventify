@@ -70,15 +70,30 @@ function eventifyFillAndShowEventDetails(event) {
     let dateStr = '';
     if (event.start) {
         const dOpts = { year: 'numeric', month: 'short', day: 'numeric' };
-        dateStr = event.start.toLocaleDateString(undefined, dOpts);
         const tOpts = { hour: 'numeric', minute: '2-digit', hour12: true };
+        const startYmd = String(props.event_date_ymd || '').trim();
+        const endYmd = String(props.event_end_date_ymd || startYmd).trim();
         const startTime = event.start.toLocaleTimeString(undefined, tOpts);
-        let range = startTime;
-        if (event.end) {
-            const endTime = event.end.toLocaleTimeString(undefined, tOpts);
-            range = startTime + ' – ' + endTime;
+        const hasEndTime = event.end && !Number.isNaN(event.end.getTime());
+        const endTime = hasEndTime ? event.end.toLocaleTimeString(undefined, tOpts) : '';
+
+        if (endYmd && startYmd && endYmd > startYmd) {
+            const endDateObj = new Date(endYmd + 'T12:00:00');
+            const endDateLabel = endDateObj.toLocaleDateString(undefined, dOpts);
+            dateStr = event.start.toLocaleDateString(undefined, dOpts) + ' – ' + endDateLabel;
+            if (startTime && endTime && (startTime !== '12:00 AM' || endTime !== '11:59 PM')) {
+                dateStr += ' · ' + startTime + ' – ' + endTime;
+            }
+        } else {
+            dateStr = event.start.toLocaleDateString(undefined, dOpts);
+            if (startTime && startTime !== '12:00 AM') {
+                let range = startTime;
+                if (hasEndTime && endTime) {
+                    range = startTime + ' – ' + endTime;
+                }
+                dateStr += ' · ' + range;
+            }
         }
-        dateStr += ' · ' + range;
     }
     const dateCell = document.getElementById('eventDate');
     if (dateCell) {
@@ -296,6 +311,38 @@ function initOrganizerSidebarToggle() {
 }
 
 // Initialize on DOM ready
+function initCreateEventDateRange() {
+    const form = document.getElementById('createEventModalForm');
+    const startEl = document.getElementById('ceDate');
+    const endEl = document.getElementById('ceEndDate');
+    if (!form || !startEl || !endEl) {
+        return;
+    }
+    const syncEndMin = function () {
+        if (startEl.value) {
+            endEl.min = startEl.value;
+            if (endEl.value && endEl.value < startEl.value) {
+                endEl.value = startEl.value;
+            }
+        }
+    };
+    startEl.addEventListener('change', syncEndMin);
+    endEl.addEventListener('change', function () {
+        if (startEl.value && endEl.value && endEl.value < startEl.value) {
+            alert('End date cannot be before the start date.');
+            endEl.value = startEl.value;
+        }
+    });
+    form.addEventListener('submit', function (e) {
+        if (startEl.value && endEl.value && endEl.value < startEl.value) {
+            e.preventDefault();
+            alert('End date cannot be before the start date.');
+            endEl.focus();
+        }
+    });
+    syncEndMin();
+}
+
 function initCreateEventDeptAudience() {
     const form = document.getElementById('createEventModalForm');
     if (!form) {
@@ -456,6 +503,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initViewButtons();
     initCalendarNavigation();
     initCreateEventDeptAudience();
+    initCreateEventDateRange();
     initOrganizerEventStatusModal();
 
     var orgSettingsForm = document.getElementById('organizerSettingsForm');

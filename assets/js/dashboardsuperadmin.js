@@ -1,4 +1,35 @@
+function initSuperAdminSidebarToggle() {
+    var toggle = document.getElementById('saSidebarToggle');
+    var closeBtn = document.getElementById('saSidebarClose');
+    var backdrop = document.getElementById('saSidebarBackdrop');
+    var sidebar = document.getElementById('saSidebar');
+    var isMobileView = function () {
+        return window.matchMedia('(max-width: 768px)').matches;
+    };
+    var closeMobileSidebar = function () {
+        document.body.classList.remove('sa-sidebar-open');
+    };
+    if (toggle) {
+        toggle.addEventListener('click', function () {
+            if (isMobileView()) {
+                document.body.classList.toggle('sa-sidebar-open');
+                return;
+            }
+            document.body.classList.toggle('sa-sidebar-collapsed');
+        });
+    }
+    if (closeBtn) closeBtn.addEventListener('click', closeMobileSidebar);
+    if (backdrop) backdrop.addEventListener('click', closeMobileSidebar);
+    if (sidebar) {
+        sidebar.addEventListener('click', function (e) {
+            var target = e.target.closest('.action-btn, [data-bs-toggle="modal"]');
+            if (target && isMobileView()) closeMobileSidebar();
+        });
+    }
+}
+
 function eventifyInitSuperAdminDashboard() {
+    initSuperAdminSidebarToggle();
     var pendingConfirmForm = null;
     var actionConfirmModalEl = document.getElementById('actionConfirmModal');
     var actionConfirmTextEl = document.getElementById('actionConfirmText');
@@ -53,7 +84,7 @@ function eventifyInitSuperAdminDashboard() {
                 type: 'bar',
                 data: {
                     labels: ur.labels || [],
-                    datasets: [{ data: ur.counts || [], backgroundColor: 'rgba(56,189,248,0.65)', borderColor: 'rgba(56,189,248,1)', borderWidth: 1 }]
+                    datasets: [{ data: ur.counts || [], backgroundColor: 'rgba(230, 197, 74, 0.85)', borderColor: 'rgba(27, 74, 27, 1)', borderWidth: 1 }]
                 },
                 options: {
                     responsive: true,
@@ -69,7 +100,7 @@ function eventifyInitSuperAdminDashboard() {
                 type: 'doughnut',
                 data: {
                     labels: es.labels || [],
-                    datasets: [{ data: es.counts || [], backgroundColor: ['rgba(234,179,8,.85)', 'rgba(16,185,129,.85)', 'rgba(239,68,68,.85)', 'rgba(100,116,139,.85)'] }]
+                    datasets: [{ data: es.counts || [], backgroundColor: ['rgba(230,197,74,.9)', 'rgba(27,74,27,.85)', 'rgba(185,28,28,.85)', 'rgba(100,116,139,.85)'] }]
                 },
                 options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
             });

@@ -35,22 +35,23 @@ $messengerHref = BASE_URL . '/backend/messaging/staff_messenger.php';
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="<?= BASE_URL; ?>/assets/css/dashboard_student.css">
+    <link rel="stylesheet" href="<?= BASE_URL; ?>/assets/css/dashboardorganizer.css">
+    <link rel="stylesheet" href="<?= BASE_URL; ?>/assets/css/dashboardsuperadmin.css">
     <link rel="stylesheet" href="<?= BASE_URL; ?>/assets/css/dashboard_admin.css">
 </head>
 <body class="admin-dashboard">
 
-<nav class="adm-navbar">
-    <div class="d-flex align-items-center">
+<nav class="adm-navbar top-navbar">
+    <div class="navbar-left">
         <button type="button" class="nav-btn sidebar-toggle-mobile me-2" id="adminSidebarToggle" aria-label="Toggle sidebar" title="Toggle sidebar">
             <i class="fas fa-bars"></i>
         </button>
-        <a href="<?= BASE_URL ?>/backend/admin/dashboard.php" class="adm-brand">
+        <a href="<?= BASE_URL ?>/backend/admin/dashboard.php" class="adm-brand brand-logo">
             <i class="fas fa-calendar-alt"></i>
             <span>EVENTIFY</span>
         </a>
     </div>
-    <div class="d-flex align-items-center">
+    <div class="navbar-right">
         <a class="nav-btn position-relative me-2" title="Messages (Organizers)" href="<?= htmlspecialchars($messengerHref) ?>" target="_blank" rel="noopener noreferrer">
             <i class="fas fa-comments"></i>
             <?php if ($staff_messaging_unread > 0): ?>
@@ -92,11 +93,11 @@ $messengerHref = BASE_URL . '/backend/messaging/staff_messenger.php';
     <div class="sidebar-backdrop" id="adminSidebarBackdrop" aria-hidden="true"></div>
     <aside class="sidebar" id="adminSidebar">
         <button type="button" class="sidebar-close-mobile" id="adminSidebarClose" aria-label="Close menu"><i class="fas fa-times"></i></button>
-        <div class="user-info-card">
-            <div class="user-avatar-large"><?= strtoupper(substr($admin_name, 0, 1)) ?></div>
-            <h3 class="user-name"><?= htmlspecialchars($admin_name) ?></h3>
-            <p class="user-id">Role: Admin</p>
-            <span class="user-dept-badge">System-wide</span>
+        <div class="organizer-user-card">
+            <div class="organizer-user-avatar"><?= strtoupper(substr($admin_name, 0, 1)) ?></div>
+            <div class="organizer-user-name"><?= htmlspecialchars($admin_name) ?></div>
+            <div class="organizer-user-role">Admin</div>
+            <div class="organizer-user-scope">System-wide</div>
         </div>
         <div class="mini-calendar-widget">
             <div class="mini-calendar-header">
@@ -108,7 +109,7 @@ $messengerHref = BASE_URL . '/backend/messaging/staff_messenger.php';
         </div>
         <div class="quick-actions">
             <h3 class="section-title">QUICK ACTIONS</h3>
-            <button type="button" class="action-btn w-100 text-start border-0 bg-transparent" data-bs-toggle="modal" data-bs-target="#pendingEventsModal">
+            <button type="button" class="action-btn" data-bs-toggle="modal" data-bs-target="#pendingEventsModal">
                 <i class="fas fa-inbox"></i>
                 <span>Pending Events</span>
                 <?php if ($pendingCount > 0): ?>
@@ -118,17 +119,17 @@ $messengerHref = BASE_URL . '/backend/messaging/staff_messenger.php';
                 <?php endif; ?>
                 <i class="fas fa-chevron-right ms-auto"></i>
             </button>
-            <button type="button" class="action-btn w-100 text-start border-0 bg-transparent" data-bs-toggle="modal" data-bs-target="#adminUpcomingEventsModal">
+            <button type="button" class="action-btn" data-bs-toggle="modal" data-bs-target="#adminUpcomingEventsModal">
                 <i class="fas fa-calendar-check"></i>
                 <span>Upcoming Events<?= $upcomingAdminCount > 0 ? ' (' . $upcomingAdminCount . ')' : '' ?></span>
                 <i class="fas fa-chevron-right ms-auto"></i>
             </button>
-            <a class="action-btn w-100 text-start border-0 bg-transparent text-decoration-none text-reset" href="<?= htmlspecialchars($messengerHref) ?>" target="_blank" rel="noopener noreferrer">
+            <a class="action-btn" href="<?= htmlspecialchars($messengerHref) ?>" target="_blank" rel="noopener noreferrer">
                 <i class="fas fa-comments"></i>
                 <span>Messages<?= $staff_messaging_unread > 0 ? ' (' . $staff_messaging_unread . ')' : '' ?></span>
                 <i class="fas fa-chevron-right ms-auto"></i>
             </a>
-            <button type="button" class="action-btn w-100 text-start border-0 bg-transparent" data-bs-toggle="modal" data-bs-target="#adminStudentFeedbackModal">
+            <button type="button" class="action-btn" data-bs-toggle="modal" data-bs-target="#adminStudentFeedbackModal">
                 <i class="fas fa-star-half-stroke"></i>
                 <span>Student feedback</span>
                 <?php if (!empty($admin_feedback_list)): ?>
@@ -136,12 +137,12 @@ $messengerHref = BASE_URL . '/backend/messaging/staff_messenger.php';
                 <?php endif; ?>
                 <i class="fas fa-chevron-right ms-auto"></i>
             </button>
-            <button type="button" class="action-btn w-100 text-start border-0 bg-transparent" data-bs-toggle="modal" data-bs-target="#auditLogModal">
+            <button type="button" class="action-btn" data-bs-toggle="modal" data-bs-target="#auditLogModal">
                 <i class="fas fa-clipboard-list"></i>
                 <span>Audit log</span>
                 <i class="fas fa-chevron-right ms-auto"></i>
             </button>
-            <button type="button" class="action-btn w-100 text-start border-0 bg-transparent" data-bs-toggle="modal" data-bs-target="#adminSettingsModal">
+            <button type="button" class="action-btn" data-bs-toggle="modal" data-bs-target="#adminSettingsModal">
                 <i class="fas fa-cog"></i>
                 <span>Settings</span>
                 <i class="fas fa-chevron-right ms-auto"></i>
@@ -153,20 +154,28 @@ $messengerHref = BASE_URL . '/backend/messaging/staff_messenger.php';
         </div>
     </aside>
 
-    <main class="main-content">
+    <main class="main-content sa-dashboard-main">
+        <div class="sa-page-header">
+            <h1 class="sa-page-title"><i class="fas fa-gauge-high me-2"></i>Admin Dashboard</h1>
+            <p class="sa-page-subtitle mb-0">
+                <i class="fas fa-user-shield me-1"></i>Logged in as <strong><?= htmlspecialchars($admin_name) ?></strong>
+            </p>
+        </div>
+        <div class="sa-dashboard-body">
         <?php if ($success): ?>
-            <div class="alert alert-success alert-dismissible fade show m-3" role="alert">
-                <?= htmlspecialchars($success) ?>
+            <div class="alert alert-success alert-dismissible fade show sa-alert" role="alert">
+                <i class="fas fa-check-circle me-2"></i><?= htmlspecialchars($success) ?>
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
         <?php endif; ?>
         <?php if ($error): ?>
-            <div class="alert alert-danger alert-dismissible fade show m-3" role="alert">
-                <?= htmlspecialchars($error) ?>
+            <div class="alert alert-danger alert-dismissible fade show sa-alert" role="alert">
+                <i class="fas fa-triangle-exclamation me-2"></i><?= htmlspecialchars($error) ?>
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
         <?php endif; ?>
-        <div class="adm-stats">
+        <div class="sa-card adm-overview-card">
+        <div class="sa-stats-grid adm-stats">
             <div class="adm-stat-card">
                 <div class="adm-stat-label">Pending approval</div>
                 <div class="adm-stat-value"><?= (int)$eventStats['pending'] ?></div>
@@ -184,26 +193,28 @@ $messengerHref = BASE_URL . '/backend/messaging/staff_messenger.php';
                 <div class="adm-stat-value"><?= number_format((float)($feedbackStats['avg_rating'] ?? 0), 2) ?></div>
             </div>
         </div>
-        <div class="adm-charts">
-            <div class="adm-chart-card">
-                <h6 class="mb-0">Events by department</h6>
+        <div class="sa-charts-grid adm-charts">
+            <div class="sa-chart-card adm-chart-card">
+                <div class="sa-chart-title">Events by department</div>
                 <div class="adm-chart-wrap">
                     <canvas id="adminChartDept" aria-label="Bar chart of events by department"></canvas>
                 </div>
             </div>
-            <div class="adm-chart-card">
-                <h6 class="mb-0">Events by status</h6>
+            <div class="sa-chart-card adm-chart-card">
+                <div class="sa-chart-title">Events by status</div>
                 <div class="adm-chart-wrap">
                     <canvas id="adminChartStatus" aria-label="Doughnut chart of events by status"></canvas>
                 </div>
             </div>
-            <div class="adm-chart-card">
-                <h6 class="mb-0">Feedback ratings distribution</h6>
+            <div class="sa-chart-card adm-chart-card">
+                <div class="sa-chart-title">Feedback ratings distribution</div>
                 <div class="adm-chart-wrap">
                     <canvas id="adminChartFeedback" aria-label="Bar chart of feedback ratings"></canvas>
                 </div>
             </div>
         </div>
+        </div>
+        <div class="sa-card adm-calendar-card">
         <div class="calendar-controls">
             <div class="controls-left">
                 <button class="control-nav" id="calPrev"><i class="fas fa-chevron-left"></i></button>
@@ -226,6 +237,8 @@ $messengerHref = BASE_URL . '/backend/messaging/staff_messenger.php';
         </div>
         <div class="calendar-container">
             <div id="calendar"></div>
+        </div>
+        </div>
         </div>
     </main>
 </div>

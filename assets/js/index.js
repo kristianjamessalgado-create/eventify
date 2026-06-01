@@ -12,13 +12,14 @@ function isMobileView() {
 function updateLandingScrollProgress() {
     var fill = document.getElementById('landingScrollProgress');
     if (!fill) return;
-    if (isMobileView()) {
+    var activeId = currentSection && currentSection.id ? currentSection.id : 'public-calendar';
+    var useScroll = isMobileView() || activeId === 'public-calendar';
+    if (useScroll) {
         var docEl = document.documentElement;
         var sh = docEl.scrollHeight - window.innerHeight;
         var pct = sh > 12 ? Math.min(100, Math.max(0, (window.scrollY / sh) * 100)) : 0;
         fill.style.width = pct + '%';
     } else {
-        var activeId = currentSection && currentSection.id ? currentSection.id : 'public-calendar';
         var idx = LANDING_SECTION_ORDER.indexOf(activeId);
         if (idx < 0) idx = 0;
         var denom = Math.max(1, LANDING_SECTION_ORDER.length - 1);
@@ -102,7 +103,7 @@ function initLandingPolish() {
 
     var scrollQueued = false;
     window.addEventListener('scroll', function () {
-        if (!isMobileView()) return;
+        if (!isMobileView() && !(currentSection && currentSection.id === 'public-calendar')) return;
         if (scrollQueued) return;
         scrollQueued = true;
         window.requestAnimationFrame(function () {
@@ -126,6 +127,57 @@ function initLandingPolish() {
 
     bindLandingMagnetic();
     initFaqAccordion();
+}
+
+function syncVideoHeroToCalendarCard() {
+    var hero = document.querySelector('.video-hero-container');
+    var card = document.querySelector('.public-calendar-card');
+    if (!hero || !card) return;
+    var h = card.offsetHeight;
+    if (h > 0) {
+        hero.style.height = h + 'px';
+        hero.style.minHeight = h + 'px';
+    }
+}
+
+function initLandingHeroVideo() {
+    var video = document.querySelector('.hero-video-bg, .landing-hero-video');
+    if (!video) return;
+    video.muted = true;
+    video.setAttribute('muted', '');
+    video.setAttribute('playsinline', '');
+    var tryPlay = function () {
+        var p = video.play();
+        if (p && typeof p.catch === 'function') {
+            p.catch(function () {});
+        }
+    };
+    if (video.readyState >= 2) {
+        tryPlay();
+    } else {
+        video.addEventListener('loadeddata', tryPlay, { once: true });
+    }
+    document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) tryPlay();
+    });
+}
+
+function initVideoHeroCalendarSizeSync() {
+    var hero = document.querySelector('.video-hero-container');
+    if (!hero) return;
+
+    var runSync = function () {
+        window.requestAnimationFrame(syncVideoHeroToCalendarCard);
+    };
+
+    runSync();
+    window.addEventListener('resize', runSync);
+
+    var card = document.querySelector('.public-calendar-card');
+    if (card && typeof ResizeObserver !== 'undefined') {
+        var ro = new ResizeObserver(runSync);
+        ro.observe(card);
+    }
 }
 
 function initLandingPhotoRail() {
@@ -311,6 +363,8 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     initLandingPolish();
+    initLandingHeroVideo();
+    initVideoHeroCalendarSizeSync();
     initLandingPhotoRail();
 
     if (registerRoleSelectModal && registerDepartmentWrapModal) {
@@ -678,10 +732,14 @@ document.addEventListener('DOMContentLoaded', function () {
                 },
                 datesSet: function () {
                     syncMonth(calendar);
+                    syncVideoHeroToCalendarCard();
                 }
             });
             calendar.render();
             syncMonth(calendar);
+            window.requestAnimationFrame(function () {
+                syncVideoHeroToCalendarCard();
+            });
         }
     } catch (err) {
         // ignore calendar init failures on landing

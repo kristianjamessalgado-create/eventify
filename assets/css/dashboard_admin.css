@@ -1,62 +1,156 @@
-/* Stack above .dashboard-layout so dropdowns are not painted underneath the sidebar/main (sibling stacking). Keep below Bootstrap modals (~1055). */
-.adm-navbar {
-    position: relative;
-    z-index: 1030;
+/* Admin dashboard — extends organizer + super admin themes */
+
+/* —— Top navbar —— */
+.admin-dashboard .adm-navbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    height: 64px;
+    padding: 0 1.5rem;
+    z-index: 1000;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 1rem 1.5rem;
-    background: rgba(10, 10, 10, 0.9);
-    border-bottom: 1px solid rgba(255,255,255,0.08);
-    overflow: visible;
+    flex-wrap: nowrap;
+    gap: 1rem;
 }
-.adm-brand { display: flex; align-items: center; gap: 0.5rem; font-weight: 800; font-size: 1.25rem; color: #e5e7eb; text-decoration: none; }
-.adm-brand i { color: #0ea5e9; }
-.adm-user { color: #94a3b8; font-size: 0.9rem; margin-right: 0.75rem; }
-.adm-logout { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; color: #94a3b8; text-decoration: none; font-weight: 600; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); }
-.adm-logout:hover { color: #0ea5e9; border-color: #0ea5e9; background: rgba(14, 165, 233, 0.1); }
-.adm-user-menu {
+
+.admin-dashboard .adm-navbar .navbar-left,
+.admin-dashboard .adm-navbar .navbar-right {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.admin-dashboard .adm-navbar .navbar-right {
+    margin-left: auto;
+    gap: 12px;
+}
+
+.admin-dashboard .adm-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    color: var(--school-text-on-dark);
+    text-decoration: none;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.admin-dashboard .adm-brand i {
+    color: var(--school-gold);
+    font-size: 24px;
+}
+
+.admin-dashboard .adm-navbar .nav-btn {
+    width: 40px;
+    height: 40px;
+    border: none;
     background: transparent;
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    color: #e2e8f0;
     border-radius: 8px;
-    padding: 0.45rem 0.8rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--school-text-muted);
+    transition: all 0.2s ease;
+    text-decoration: none;
+    padding: 0;
+}
+
+.admin-dashboard .adm-navbar .nav-btn:hover {
+    background: rgba(249, 237, 0, 0.18);
+    color: var(--school-gold);
+}
+
+.admin-dashboard .adm-user-menu {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: linear-gradient(135deg, var(--school-green-bright) 0%, #0d4d24 100%);
+    border: 2px solid rgba(249, 237, 0, 0.45);
+    color: var(--school-text-on-dark);
+    border-radius: 999px;
+    padding: 0.45rem 0.9rem;
     font-size: 0.9rem;
     font-weight: 600;
+    white-space: nowrap;
 }
-.adm-user-menu:hover,
-.adm-user-menu:focus {
-    color: #38bdf8;
-    border-color: #38bdf8;
-    background: rgba(14, 165, 233, 0.12);
+
+.admin-dashboard .adm-user-menu:hover,
+.admin-dashboard .adm-user-menu:focus {
+    color: var(--school-gold);
+    border-color: var(--school-gold);
+    background: rgba(249, 237, 0, 0.12);
 }
-.adm-dropdown-menu {
+
+.admin-dashboard .adm-dropdown-menu {
     border-radius: 10px;
-    border: 1px solid #e2e8f0;
-    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.16);
+    border: 1px solid var(--school-border);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
 }
-.adm-dropdown-menu .dropdown-item {
-    font-size: 0.9rem;
-    padding: 0.55rem 0.9rem;
+
+/* —— Sidebar (match super admin organizer-user-card) —— */
+.admin-dashboard #adminSidebar {
+    padding: 1.25rem;
+    gap: 1.25rem;
+    box-sizing: border-box;
+    overflow-x: hidden;
 }
-.adm-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; padding: 1.25rem 1.5rem; }
-.adm-stat-card { border-radius: 12px; border: 1px solid #e2e8f0; padding: 1rem; background: #f8fafc; }
-.adm-stat-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: #64748b; margin-bottom: 0.25rem; }
-.adm-stat-value { font-size: 1.5rem; font-weight: 800; color: #0f172a; }
-.adm-badge-pending { background: #fef3c7; color: #92400e; }
-.adm-badge-dept { background: #eff6ff; color: #1d4ed8; }
-.adm-actions { display: flex; flex-wrap: wrap; gap: 0.35rem; }
-.adm-btn-approve { background: #10b981; color: #fff; border: none; padding: 0.35rem 0.7rem; border-radius: 8px; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
-.adm-btn-reject { background: #fee2e2; color: #b91c1c; border: none; padding: 0.35rem 0.7rem; border-radius: 8px; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
-/* Keep quick-action links readable on dark sidebar (fixes "Messages" link color). */
-.sidebar .quick-actions a.action-btn,
-.sidebar .quick-actions a.action-btn:link,
-.sidebar .quick-actions a.action-btn:visited {
-    color: #f8fafc !important;
+
+.admin-dashboard #adminSidebar .organizer-user-card {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    flex-shrink: 0;
+    margin: 0;
 }
-.sidebar .quick-actions a.action-btn:hover,
-.sidebar .quick-actions a.action-btn:focus {
-    color: #fef08a !important;
+
+.admin-dashboard #adminSidebar .organizer-user-name,
+.admin-dashboard #adminSidebar .organizer-user-scope {
+    width: 100%;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.admin-dashboard #adminSidebar .organizer-user-scope {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--school-text-muted);
+    margin-top: -2px;
+}
+
+.admin-dashboard #adminSidebar .mini-calendar-widget,
+.admin-dashboard #adminSidebar .quick-actions {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.admin-dashboard #adminSidebar .quick-actions .action-btn {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    text-align: left;
+}
+
+.admin-dashboard #adminSidebar .quick-actions .action-btn span {
+    flex: 1;
+    min-width: 0;
+}
+
+.admin-dashboard #adminSidebar .quick-actions .fa-chevron-right {
+    color: rgba(249, 237, 0, 0.55);
+    font-size: 0.75rem;
+    margin-left: auto;
+    flex-shrink: 0;
 }
 
 .admin-pending-badge {
@@ -65,7 +159,7 @@
     justify-content: center;
     min-width: 22px;
     height: 22px;
-    margin-left: 0.45rem;
+    margin-left: 0.35rem;
     padding: 0 0.4rem;
     border-radius: 999px;
     background: #dc2626;
@@ -74,170 +168,381 @@
     font-weight: 700;
     line-height: 1;
     border: 1px solid rgba(255, 255, 255, 0.35);
+    flex-shrink: 0;
 }
-#auditLogModal .modal-body { max-height: min(70vh, 520px); overflow-y: auto; }
-#auditLogModal .table { font-size: 0.8rem; }
-#auditLogModal .table thead th { position: sticky; top: 0; background: #f8fafc; z-index: 1; }
-.adm-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; padding: 0 1.5rem 1rem; }
-.adm-chart-card { border-radius: 12px; border: 1px solid #e2e8f0; padding: 1rem; background: #fff; }
-.adm-chart-card h6 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 0.75rem; }
-.adm-chart-wrap { position: relative; height: 220px; }
-.adm-chart-empty { display: flex; align-items: center; justify-content: center; height: 100%; color: #64748b; font-size: 0.85rem; text-align: center; }
-.admin-dashboard .dashboard-layout {
+
+/* —— Main content layout —— */
+.admin-dashboard .sa-dashboard-main {
     display: flex;
-    margin-top: 0 !important;
-    padding-top: 0 !important;
-    min-height: calc(100vh - 64px);
-    overflow: visible;
-}
-
-.admin-dashboard #adminSidebar {
-    margin-top: 0 !important;
-    padding-top: 0 !important;
-}
-
-/* Admin profile card: match organizer/student forest-gold theme */
-.admin-dashboard #adminSidebar .user-info-card {
-    background: linear-gradient(135deg, #2f6626 0%, #1b4a1b 60%, #143a13 100%);
-    border: 2px solid #e6c54a;
-    border-radius: 14px;
-    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
-    color: #ffffff;
-}
-
-.admin-dashboard #adminSidebar .user-avatar-large {
-    background: linear-gradient(135deg, #e6c54a 0%, #b88f2a 100%);
-    color: #0f4b2d;
-    border: 3px solid rgba(27, 74, 27, 0.35);
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
-}
-
-.admin-dashboard #adminSidebar .user-name {
-    color: #ffffff;
-    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
-}
-
-.admin-dashboard #adminSidebar .user-id {
-    color: rgba(247, 244, 231, 0.9);
-}
-
-.admin-dashboard #adminSidebar .user-dept-badge {
-    background: #e6c54a;
-    color: #1b4a1b;
-    border: 1px solid rgba(27, 74, 27, 0.35);
-    font-weight: 700;
-    letter-spacing: 0.08em;
-}
-
-.admin-dashboard .main-content {
-    min-width: 0;
+    flex-direction: column;
     overflow-y: auto;
     overflow-x: hidden;
+    min-width: 0;
 }
 
-.sidebar-toggle-mobile {
-    display: inline-flex;
-}
-/* Admin navbar is in normal flow, so remove inherited 64px top offset from student CSS. */
-.dashboard-layout {
-    margin-top: 0 !important;
-}
-/* Remove inherited top inset in sidebar so it sits flush under admin navbar. */
-.sidebar,
-#adminSidebar {
-    padding-top: 0 !important;
-    margin-top: 0 !important;
+.admin-dashboard .sa-dashboard-body {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    padding: 1.25rem 1.5rem 2rem;
+    flex: 1;
 }
 
-#adminSidebar .user-info-card {
-    margin-top: 0 !important;
-}
-.sidebar-close-mobile {
-    display: none;
-}
-/* Admin uses cards + charts + calendar on one page; allow vertical scroll instead of clipping calendar rows. */
-.main-content { overflow-y: auto; overflow-x: hidden; }
-.main-content .calendar-container { flex: 0 0 auto; min-height: 760px; }
-.main-content #calendar { min-height: 700px; }
-.admin-calendar-legend {
-    margin: 0 1.5rem 0.75rem;
-    padding: 0.6rem 0.8rem;
+.admin-dashboard .sa-dashboard-body > .sa-alert {
+    margin: 0;
     border-radius: 10px;
-    border: 1px solid #e2e8f0;
-    background: #ffffff;
+}
+
+.admin-dashboard .adm-overview-card {
+    overflow: hidden;
+}
+
+.admin-dashboard .adm-overview-card .adm-stats {
+    padding-bottom: 0.25rem;
+}
+
+.admin-dashboard .adm-overview-card .adm-charts {
+    padding-top: 0;
+}
+
+/* Stat cards (adm-* aliases sa-*) */
+.admin-dashboard .adm-stat-card {
+    border-radius: 12px;
+    border: 1px solid rgba(1, 50, 32, 0.18);
+    padding: 0.9rem 1rem;
+    background: linear-gradient(180deg, #fff 0%, var(--school-cream) 100%);
+}
+
+.admin-dashboard .adm-stat-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--school-forest-mid);
+    margin-bottom: 0.25rem;
+    font-weight: 700;
+}
+
+.admin-dashboard .adm-stat-value {
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: var(--school-forest-card);
+}
+
+.admin-dashboard .adm-chart-wrap {
+    position: relative;
+    height: 220px;
+}
+
+.adm-chart-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #64748b;
+    font-size: 0.85rem;
+    text-align: center;
+}
+
+/* Calendar card */
+.admin-dashboard .adm-calendar-card {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 0;
+}
+
+.admin-dashboard .adm-calendar-card .calendar-controls {
+    flex-shrink: 0;
+    margin: 0;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    border-top: none;
+}
+
+.admin-dashboard .admin-calendar-legend {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.9rem;
+    align-items: center;
+    gap: 0.75rem 1.25rem;
+    padding: 0.75rem 1.25rem;
+    margin: 0;
+    background: rgba(1, 50, 32, 0.06);
+    border-top: 1px solid rgba(1, 50, 32, 0.12);
+    border-bottom: 1px solid rgba(1, 50, 32, 0.12);
+    color: var(--school-forest-card);
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.admin-dashboard .adm-calendar-card .calendar-container {
+    flex: 1 1 auto;
+    min-height: 680px;
+    padding: 0 1rem 1rem;
+    margin: 0;
+    background: #fff;
+}
+
+.admin-dashboard .adm-calendar-card #calendar {
+    min-height: 640px;
+}
+
+.admin-dashboard .controls-right {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
+}
+
+/* Badges & table actions */
+.adm-badge-pending {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.adm-badge-dept {
+    background: #eff6ff;
+    color: #1d4ed8;
+}
+
+.adm-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    align-items: center;
+}
+
+.adm-btn-approve {
+    padding: 0.4rem 0.85rem;
     font-size: 0.8rem;
+    font-weight: 600;
+    border-radius: 8px;
+    border: none;
+    background: var(--school-forest-card);
+    color: var(--school-gold);
+    cursor: pointer;
+}
+
+.adm-btn-approve:hover {
+    background: var(--school-forest-deep);
+    color: #fff;
+}
+
+.adm-btn-reject {
+    padding: 0.4rem 0.85rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    border-radius: 8px;
+    border: none;
+    background: #fee2e2;
+    color: #b91c1c;
+    cursor: pointer;
+}
+
+.adm-btn-reject:hover {
+    background: #fecaca;
+}
+
+/* Modal tables */
+.admin-dashboard #pendingEventsModal .table,
+.admin-dashboard #auditLogModal .table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+    margin-bottom: 0;
+}
+
+.admin-dashboard #pendingEventsModal .table thead tr,
+.admin-dashboard #auditLogModal .table thead tr {
+    background: var(--school-cream);
+    border-bottom: 2px solid var(--school-border);
+}
+
+.admin-dashboard #pendingEventsModal .table th,
+.admin-dashboard #auditLogModal .table th {
+    padding: 1rem 1.25rem;
+    text-align: left;
+    font-weight: 700;
+    color: var(--school-forest-card);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-size: 0.75rem;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
+.admin-dashboard #pendingEventsModal .table td,
+.admin-dashboard #auditLogModal .table td {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid #e2e8f0;
+    color: #334155;
+    vertical-align: middle;
+}
+
+.admin-dashboard #pendingEventsModal .table tbody tr:hover,
+.admin-dashboard #auditLogModal .table tbody tr:hover {
+    background: rgba(249, 237, 0, 0.08);
+}
+
+/* Admin-only modal headers */
+#adminUpcomingEventsModal .modal-header,
+#adminStudentFeedbackModal .modal-header,
+#auditLogModal .modal-header,
+#adminSettingsModal .modal-header,
+#adminNotificationsModal .modal-header,
+#confirmAdminSettingsUpdateModal .modal-header,
+#otpRequestConfirmModal .modal-header,
+#eventDetailsModal .modal-header {
+    background: linear-gradient(180deg, var(--school-forest-card) 0%, #102f10 100%);
+    border-bottom: 2px solid var(--school-gold);
+    color: var(--school-text-on-dark);
+}
+
+#adminUpcomingEventsModal .modal-title,
+#adminStudentFeedbackModal .modal-title,
+#auditLogModal .modal-title,
+#adminSettingsModal .modal-title,
+#adminNotificationsModal .modal-title,
+#confirmAdminSettingsUpdateModal .modal-title,
+#otpRequestConfirmModal .modal-title,
+#eventDetailsModal .modal-title {
+    color: var(--school-text-on-dark);
+    font-weight: 700;
+}
+
+#adminUpcomingEventsModal .btn-close,
+#adminStudentFeedbackModal .btn-close,
+#auditLogModal .btn-close,
+#adminSettingsModal .btn-close,
+#adminNotificationsModal .btn-close,
+#confirmAdminSettingsUpdateModal .btn-close,
+#otpRequestConfirmModal .btn-close,
+#eventDetailsModal .btn-close {
+    filter: invert(1) brightness(1.3);
+}
+
+#auditLogModal .modal-body {
+    max-height: min(70vh, 520px);
+    overflow-y: auto;
+}
+
+#auditLogModal .table {
+    font-size: 0.8rem;
+}
+
+#auditLogModal .table thead th {
+    position: sticky;
+    top: 0;
+    background: var(--school-cream);
+    z-index: 1;
+}
+
+#adminSettingsModal .modal-body {
+    background: #f8fafc;
+    max-height: min(70vh, 560px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+}
+
+#adminSettingsModal .settings-section {
+    border: 1px solid rgba(1, 50, 32, 0.18);
+    border-radius: 12px;
+    background: #ffffff;
+    padding: 0.85rem;
+    margin-bottom: 0.85rem;
+}
+
+#adminSettingsModal .settings-section h6 {
+    margin-bottom: 0.65rem;
+    font-weight: 700;
+    color: var(--school-forest-card);
+}
+
+#adminSettingsModal .form-check-label {
+    font-size: 0.92rem;
     color: #334155;
 }
 
-@media (min-width: 769px) {
-    .dashboard-layout {
-        margin-top: 0 !important;
-        padding-top: 0 !important;
-    }
-
-    /* Cancel inherited student desktop sticky offset on admin sidebar. */
-    #adminSidebar {
-        position: relative !important;
-        top: 0 !important;
-        height: auto !important;
-        margin-top: 0 !important;
-        padding-top: 0 !important;
-    }
-
-    #adminSidebar {
-        transition: width 0.34s cubic-bezier(0.22, 1, 0.36, 1),
-                    padding-left 0.34s cubic-bezier(0.22, 1, 0.36, 1),
-                    padding-right 0.34s cubic-bezier(0.22, 1, 0.36, 1),
-                    opacity 0.22s ease,
-                    border-color 0.22s ease,
-                    box-shadow 0.22s ease;
-    }
-
-    .admin-dashboard #adminSidebar {
-        position: relative !important;
-        top: 0 !important;
-        height: auto !important;
-    }
-
-    body.admin-sidebar-collapsed #adminSidebar {
-        width: 0 !important;
-        min-width: 0 !important;
-        padding-left: 0 !important;
-        padding-right: 0 !important;
-        border-right-color: transparent !important;
-        box-shadow: none !important;
-        opacity: 0;
-        overflow: hidden;
-        pointer-events: none;
-    }
-
-    #adminSidebar.is-collapsed {
-        width: 0 !important;
-        min-width: 0 !important;
-        padding-left: 0 !important;
-        padding-right: 0 !important;
-        border-right-color: transparent !important;
-        box-shadow: none !important;
-        opacity: 0;
-        overflow: hidden;
-        pointer-events: none;
-    }
-
-    body.admin-sidebar-collapsed .main-content {
-        border-left: 0 !important;
-    }
+/* Layout offset */
+.admin-dashboard .dashboard-layout {
+    margin-top: 64px !important;
+    min-height: calc(100vh - 64px);
 }
 
+/* Mobile */
 @media (max-width: 768px) {
-    /* Hard reset inherited student offsets so sidebar starts immediately. */
-    .dashboard-layout {
-        padding-top: 0 !important;
+    .admin-dashboard .adm-navbar {
+        padding: 0 1rem;
     }
 
-    .sidebar-backdrop {
+    .admin-dashboard .adm-user-menu {
+        max-width: 140px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        padding: 0.4rem 0.65rem;
+        font-size: 0.82rem;
+    }
+
+    .admin-dashboard .sa-dashboard-body {
+        padding: 1rem;
+        gap: 1rem;
+    }
+
+    .admin-dashboard .sa-page-header {
+        padding: 1rem;
+    }
+
+    .admin-dashboard .sa-stats-grid,
+    .admin-dashboard .sa-charts-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .admin-dashboard .calendar-controls {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.75rem;
+        padding: 1rem;
+    }
+
+    .admin-dashboard .controls-left,
+    .admin-dashboard .controls-right {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .admin-dashboard .controls-right {
+        flex-wrap: wrap;
+    }
+
+    .admin-dashboard .view-btn {
+        flex: 1 1 auto;
+        min-width: 72px;
+    }
+
+    .admin-dashboard .adm-calendar-card .calendar-container {
+        min-height: 520px;
+        padding: 0 0.5rem 0.75rem;
+    }
+
+    .admin-dashboard .adm-calendar-card #calendar {
+        min-height: 480px;
+    }
+
+    .admin-dashboard .admin-calendar-legend {
+        padding: 0.65rem 1rem;
+        gap: 0.5rem 0.75rem;
+    }
+
+    .admin-dashboard #pendingEventsModal .table th,
+    .admin-dashboard #pendingEventsModal .table td,
+    .admin-dashboard #auditLogModal .table th,
+    .admin-dashboard #auditLogModal .table td {
+        padding: 0.75rem 1rem;
+    }
+
+    .admin-dashboard .sidebar-backdrop {
         position: fixed;
         inset: 64px 0 0 0;
         background: rgba(2, 6, 23, 0.45);
@@ -258,8 +563,8 @@
         height: auto !important;
         z-index: 1001 !important;
         transition: transform 0.22s ease;
-        padding-top: 0 !important;
-        margin-top: 0 !important;
+        padding-top: 52px !important;
+        overflow-y: auto;
     }
 
     body.admin-sidebar-open #adminSidebar {
@@ -284,155 +589,41 @@
         border-radius: 8px;
         background: rgba(2, 6, 23, 0.25);
         color: #f8fafc;
+        z-index: 2;
+    }
+
+    .modal-dialog {
+        margin: 0.5rem;
     }
 }
 
-#adminSettingsModal .modal-body {
-    background: #f8fafc;
-    max-height: min(70vh, 560px);
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    -webkit-overflow-scrolling: touch;
-}
-
-#adminSettingsModal .settings-section {
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    background: #ffffff;
-    padding: 0.85rem;
-    margin-bottom: 0.85rem;
-}
-
-#adminSettingsModal .settings-section h6 {
-    margin-bottom: 0.65rem;
-    font-weight: 700;
-    color: #0f172a;
-}
-
-#adminSettingsModal .form-check-label {
-    font-size: 0.92rem;
-    color: #334155;
-}
-@media (max-width: 768px) {
-    .adm-navbar {
-        padding: 0.75rem 1rem;
-        flex-wrap: nowrap;
-        gap: 0.5rem;
-        align-items: center;
+@media (min-width: 769px) {
+    #adminSidebar {
+        position: sticky;
+        top: 64px;
+        height: calc(100vh - 64px);
+        overflow-y: auto;
+        transition: width 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+            padding-left 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+            padding-right 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+            opacity 0.22s ease,
+            border-color 0.22s ease,
+            box-shadow 0.22s ease;
     }
 
-    .adm-brand {
-        min-width: 0;
-        flex-shrink: 1;
-    }
-
-    .adm-brand span {
-        white-space: nowrap;
+    body.admin-sidebar-collapsed #adminSidebar {
+        width: 0 !important;
+        min-width: 0 !important;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+        border-right-color: transparent !important;
+        box-shadow: none !important;
+        opacity: 0;
         overflow: hidden;
-        text-overflow: ellipsis;
-        max-width: min(160px, 38vw);
+        pointer-events: none;
     }
 
-    .adm-navbar > .d-flex {
-        flex-shrink: 0;
-        align-items: center;
-        gap: 0.25rem;
-    }
-
-    .adm-user-menu {
-        display: inline-flex;
-        align-items: center;
-        max-width: min(220px, 48vw);
-        min-width: 0;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    .dashboard-layout {
-        flex-direction: column;
-        margin-top: 0 !important;
-        height: auto;
-        min-height: calc(100vh - 64px);
-        position: relative;
-        z-index: 1;
-    }
-
-    .admin-dashboard .dashboard-layout {
-        flex-direction: row;
-        min-height: calc(100vh - 64px);
-    }
-    .main-content {
-        min-width: 0;
-    }
-    .calendar-controls {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0.65rem;
-    }
-    .controls-right {
-        width: 100%;
-        flex-wrap: wrap;
-        gap: 0.4rem;
-    }
-    .view-btn {
-        flex: 1 1 auto;
-        min-width: 78px;
-    }
-    .main-content .calendar-container { min-height: 620px; }
-    .main-content #calendar { min-height: 560px; }
-    .admin-calendar-legend {
-        margin: 0 1rem 0.75rem;
-        gap: 0.5rem 0.8rem;
-    }
-}
-
-/* ===============================
-   LANDING-STYLE SHIMMER CTA
-   Mirrors index.css Get Started sweep
-================================ */
-.adm-btn-approve,
-.adm-user-menu,
-.btn-primary,
-.view-btn.active,
-.action-btn:not(.logout-btn) {
-    position: relative;
-    overflow: hidden;
-}
-
-.adm-btn-approve::after,
-.adm-user-menu::after,
-.btn-primary::after,
-.view-btn.active::after,
-.action-btn:not(.logout-btn)::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    background: linear-gradient(
-        105deg,
-        transparent 0%,
-        transparent 38%,
-        rgba(255, 255, 255, 0.3) 50%,
-        transparent 62%,
-        transparent 100%
-    );
-    transform: translateX(-120%);
-    animation: dashboardShimmer 3.4s ease-in-out infinite;
-    pointer-events: none;
-}
-
-@keyframes dashboardShimmer {
-    0%, 18% { transform: translateX(-120%); }
-    40%, 100% { transform: translateX(120%); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .adm-btn-approve::after,
-    .adm-user-menu::after,
-    .btn-primary::after,
-    .view-btn.active::after,
-    .action-btn:not(.logout-btn)::after {
-        animation: none;
+    body.admin-sidebar-collapsed .main-content {
+        border-left: 0 !important;
     }
 }

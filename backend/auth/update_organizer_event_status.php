@@ -4,6 +4,7 @@ include __DIR__ . '/../../config/db.php';
 include __DIR__ . '/../../config/config.php';
 include __DIR__ . '/../../config/csrf.php';
 require_once __DIR__ . '/../lib/event_status_auto.php';
+require_once __DIR__ . '/../lib/event_date_range.php';
 include __DIR__ . '/../lib/activity_logger.php';
 
 if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'organizer') {
@@ -26,7 +27,7 @@ if ($event_id < 1 || !in_array($action, ['close', 'cancel'], true)) {
     exit();
 }
 
-$stmt = $conn->prepare("SELECT id, title, status, `date` AS event_date FROM events WHERE id = ? AND organizer_id = ? LIMIT 1");
+$stmt = $conn->prepare("SELECT id, title, status, `date` AS event_date, end_date FROM events WHERE id = ? AND organizer_id = ? LIMIT 1");
 $stmt->bind_param("ii", $event_id, $organizer_id);
 $stmt->execute();
 $event = $stmt->get_result()->fetch_assoc();
@@ -53,8 +54,8 @@ if ($current === 'pending' && $action === 'close') {
 
 // Ending an active event: only on or after the scheduled event date (avoids closing future events).
 if ($current === 'active' && in_array($action, ['close', 'cancel'], true)) {
-    $d = substr(trim((string) ($event['event_date'] ?? '')), 0, 10);
-    if ($d === '' || $d > date('Y-m-d')) {
+    $lastDay = eventify_event_last_day($event);
+    if ($lastDay === '' || $lastDay > date('Y-m-d')) {
         $conn->close();
         header("Location: " . BASE_URL . "/backend/auth/dashboardorganizer.php?msg=" . urlencode("You can mark this event as ended on or after its scheduled date."));
         exit();

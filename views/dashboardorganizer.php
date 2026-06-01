@@ -710,18 +710,23 @@ $eventsHasGeo = !empty($eventsHasGeo);
             <textarea name="description" id="ceDescription" class="form-control" rows="3" maxlength="1000"></textarea>
           </div>
           <div class="row g-3">
-            <div class="col-md-4">
-              <label for="ceDate" class="form-label">Event Date <span class="text-danger">*</span></label>
+            <div class="col-md-3">
+              <label for="ceDate" class="form-label">Start Date <span class="text-danger">*</span></label>
               <input type="date" name="date" id="ceDate" class="form-control" min="<?= date('Y-m-d') ?>" required>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
+              <label for="ceEndDate" class="form-label">End Date</label>
+              <input type="date" name="end_date" id="ceEndDate" class="form-control" min="<?= date('Y-m-d') ?>">
+              <small class="text-muted">Optional — leave blank for a single-day event, or pick a later date for multi-day/week events.</small>
+            </div>
+            <div class="col-md-3">
               <label for="ceStartTime" class="form-label">Start Time <span class="text-danger">*</span></label>
               <input type="time" name="start_time" id="ceStartTime" class="form-control" required>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
               <label for="ceEndTime" class="form-label">End Time</label>
               <input type="time" name="end_time" id="ceEndTime" class="form-control">
-              <small class="text-muted">Optional — leave blank if the event has no fixed end. Active events then auto-complete after that calendar day (end of day). On the event date you can also <strong>Mark as ended</strong> anytime from My Events or the calendar details.</small>
+              <small class="text-muted">On the last day if the event spans multiple dates.</small>
             </div>
           </div>
           <div class="mb-3 mt-3">
@@ -779,14 +784,13 @@ $eventsHasGeo = !empty($eventsHasGeo);
 window.BASE_URL = <?= json_encode(BASE_URL) ?>;
 window.csrfToken = <?= json_encode(function_exists('csrf_token') ? csrf_token() : '') ?>;
 window.eventsData = <?= json_encode(array_map(function($e) use ($user_name) {
+    $fc = eventify_event_fc_bounds($e);
+    $lastDay = eventify_event_last_day($e);
     return [
         'id'    => $e['id'],
         'title' => $e['title'],
-        // Combine date + time so FullCalendar can show proper times
-        'start' => trim(($e['date'] ?? '') . ' ' . ($e['start_time'] ?? '')),
-        'end'   => isset($e['end_time']) && $e['end_time'] !== null
-            ? trim(($e['date'] ?? '') . ' ' . $e['end_time'])
-            : null,
+        'start' => $fc['start'],
+        'end'   => $fc['end'],
         'extendedProps' => [
             'description'   => $e['description'],
             'location'      => $e['location'],
@@ -795,11 +799,13 @@ window.eventsData = <?= json_encode(array_map(function($e) use ($user_name) {
             'reject_reason' => $e['reject_reason'] ?? null,
             'start_time'    => $e['start_time'] ?? null,
             'end_time'      => $e['end_time'] ?? null,
+            'end_date'      => $e['end_date'] ?? null,
             'editUrl'       => 'edit_event.php?id=' . $e['id'],
             'organizer'     => $user_name,
             'department'    => $e['department'] ?? 'ALL',
             'department_display' => eventify_format_department_label((string)($e['department'] ?? 'ALL')),
             'event_date_ymd' => !empty($e['date']) ? substr(trim((string) $e['date']), 0, 10) : '',
+            'event_end_date_ymd' => $lastDay !== '' ? $lastDay : '',
         ],
     ];
 }, $events), JSON_HEX_TAG|JSON_HEX_APOS|JSON_HEX_QUOT|JSON_HEX_AMP); ?>;

@@ -8,6 +8,9 @@ require_once __DIR__ . '/../../config/departments.php';
 require_once __DIR__ . '/../lib/event_status_auto.php';
 require_once __DIR__ . '/../lib/staff_messaging.php';
 require_once __DIR__ . '/../lib/event_feedback_schema.php';
+require_once __DIR__ . '/../lib/event_date_range.php';
+
+eventify_events_end_date_ensure($conn);
 
 
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'organizer') {

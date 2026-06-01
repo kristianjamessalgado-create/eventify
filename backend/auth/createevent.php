@@ -5,6 +5,9 @@ include __DIR__ . '/../../config/config.php';
 include __DIR__ . '/../../config/csrf.php';
 include __DIR__ . '/../../config/departments.php';
 require_once __DIR__ . '/../../config/organizer_departments.php';
+require_once __DIR__ . '/../lib/event_date_range.php';
+
+eventify_events_end_date_ensure($conn);
 
 // Check if user is logged in as organizer
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'organizer') {
@@ -38,6 +41,8 @@ try {
     $eventsHasMaxCapacity = false;
 }
 
+$eventsHasEndDate = eventify_events_has_end_date($conn);
+
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!csrf_validate()) {
@@ -47,6 +52,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $title = trim($_POST['title'] ?? '');
     $description = trim($_POST['description'] ?? '');
     $date = $_POST['date'] ?? '';
+    $end_date_raw = $_POST['end_date'] ?? '';
     $start_time = $_POST['start_time'] ?? '';
     $end_time = $_POST['end_time'] ?? '';
     $location = trim($_POST['location'] ?? '');
@@ -89,8 +95,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $endTimeObj = DateTime::createFromFormat('H:i', $end_time);
                 if (!$endTimeObj || $endTimeObj->format('H:i') !== $end_time) {
                     $error = "Invalid end time format.";
-                } elseif ($endTimeObj <= $startTimeObj) {
-                    $error = "End time must be after start time.";
                 }
             }
 
@@ -102,6 +106,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             if ($eventDate < $today) {
                 $error = "Event date cannot be in the past.";
+            }
+
+            $end_date_param = null;
+            if (!$error && $eventsHasEndDate) {
+                $parsedEnd = eventify_parse_event_end_date($date, $end_date_raw);
+                if (!$parsedEnd['ok']) {
+                    $error = $parsedEnd['error'] ?? 'Invalid end date.';
+                } else {
+                    $end_date_param = $parsedEnd['value'];
+                }
+            }
+
+            if (!$error && $end_time !== '' && $endTimeObj && $end_date_param === null) {
+                if ($endTimeObj <= $startTimeObj) {
+                    $error = "End time must be after start time for a single-day event.";
+                }
             }
 
             if (!$error) {
@@ -139,46 +159,90 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     if ($eventsHasGeo && $latVal !== null && $lngVal !== null) {
                         if ($eventsHasMaxCapacity) {
-                            $stmt = $conn->prepare("INSERT INTO events (title, description, date, start_time, end_time, location, latitude, longitude, max_capacity, organizer_id, department, status, checkin_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)");
-                            if ($stmt) {
-                                $stmt->bind_param("ssssssddiiss", $title, $description, $date, $start_time_param, $end_time_param, $location, $latVal, $lngVal, $maxCapVal, $session_user_id, $department, $checkin_token);
-                                if ($stmt->execute()) {
-                                    $executed = true;
+                            if ($eventsHasEndDate) {
+                                $stmt = $conn->prepare("INSERT INTO events (title, description, date, end_date, start_time, end_time, location, latitude, longitude, max_capacity, organizer_id, department, status, checkin_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)");
+                                if ($stmt) {
+                                    $stmt->bind_param("sssssssddiiss", $title, $description, $date, $end_date_param, $start_time_param, $end_time_param, $location, $latVal, $lngVal, $maxCapVal, $session_user_id, $department, $checkin_token);
+                                    if ($stmt->execute()) {
+                                        $executed = true;
+                                    }
+                                    $stmt->close();
                                 }
-                                $stmt->close();
+                            } else {
+                                $stmt = $conn->prepare("INSERT INTO events (title, description, date, start_time, end_time, location, latitude, longitude, max_capacity, organizer_id, department, status, checkin_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)");
+                                if ($stmt) {
+                                    $stmt->bind_param("ssssssddiiss", $title, $description, $date, $start_time_param, $end_time_param, $location, $latVal, $lngVal, $maxCapVal, $session_user_id, $department, $checkin_token);
+                                    if ($stmt->execute()) {
+                                        $executed = true;
+                                    }
+                                    $stmt->close();
+                                }
                             }
                         }
                         if (!$executed) {
-                            $stmt = $conn->prepare("INSERT INTO events (title, description, date, start_time, end_time, location, latitude, longitude, organizer_id, department, status, checkin_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)");
-                            if ($stmt) {
-                                $stmt->bind_param("ssssssddiss", $title, $description, $date, $start_time_param, $end_time_param, $location, $latVal, $lngVal, $session_user_id, $department, $checkin_token);
-                                if ($stmt->execute()) {
-                                    $executed = true;
+                            if ($eventsHasEndDate) {
+                                $stmt = $conn->prepare("INSERT INTO events (title, description, date, end_date, start_time, end_time, location, latitude, longitude, organizer_id, department, status, checkin_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)");
+                                if ($stmt) {
+                                    $stmt->bind_param("sssssssddiss", $title, $description, $date, $end_date_param, $start_time_param, $end_time_param, $location, $latVal, $lngVal, $session_user_id, $department, $checkin_token);
+                                    if ($stmt->execute()) {
+                                        $executed = true;
+                                    }
+                                    $stmt->close();
                                 }
-                                $stmt->close();
+                            } else {
+                                $stmt = $conn->prepare("INSERT INTO events (title, description, date, start_time, end_time, location, latitude, longitude, organizer_id, department, status, checkin_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)");
+                                if ($stmt) {
+                                    $stmt->bind_param("ssssssddiss", $title, $description, $date, $start_time_param, $end_time_param, $location, $latVal, $lngVal, $session_user_id, $department, $checkin_token);
+                                    if ($stmt->execute()) {
+                                        $executed = true;
+                                    }
+                                    $stmt->close();
+                                }
                             }
                         }
                     }
 
                     if (!$executed && !$eventsHasGeo) {
                         if ($eventsHasMaxCapacity) {
-                            $stmt = $conn->prepare("INSERT INTO events (title, description, date, start_time, end_time, location, max_capacity, organizer_id, department, status, checkin_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)");
-                            if ($stmt) {
-                                $stmt->bind_param("ssssssiiss", $title, $description, $date, $start_time_param, $end_time_param, $location, $maxCapVal, $session_user_id, $department, $checkin_token);
-                                if ($stmt->execute()) {
-                                    $executed = true;
+                            if ($eventsHasEndDate) {
+                                $stmt = $conn->prepare("INSERT INTO events (title, description, date, end_date, start_time, end_time, location, max_capacity, organizer_id, department, status, checkin_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)");
+                                if ($stmt) {
+                                    $stmt->bind_param("ssssssssiiss", $title, $description, $date, $end_date_param, $start_time_param, $end_time_param, $location, $maxCapVal, $session_user_id, $department, $checkin_token);
+                                    if ($stmt->execute()) {
+                                        $executed = true;
+                                    }
+                                    $stmt->close();
                                 }
-                                $stmt->close();
+                            } else {
+                                $stmt = $conn->prepare("INSERT INTO events (title, description, date, start_time, end_time, location, max_capacity, organizer_id, department, status, checkin_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)");
+                                if ($stmt) {
+                                    $stmt->bind_param("ssssssiiss", $title, $description, $date, $start_time_param, $end_time_param, $location, $maxCapVal, $session_user_id, $department, $checkin_token);
+                                    if ($stmt->execute()) {
+                                        $executed = true;
+                                    }
+                                    $stmt->close();
+                                }
                             }
                         }
                         if (!$executed) {
-                            $stmt = $conn->prepare("INSERT INTO events (title, description, date, start_time, end_time, location, organizer_id, department, status, checkin_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)");
-                            if ($stmt) {
-                                $stmt->bind_param("ssssssiss", $title, $description, $date, $start_time_param, $end_time_param, $location, $session_user_id, $department, $checkin_token);
-                                if ($stmt->execute()) {
-                                    $executed = true;
+                            if ($eventsHasEndDate) {
+                                $stmt = $conn->prepare("INSERT INTO events (title, description, date, end_date, start_time, end_time, location, organizer_id, department, status, checkin_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)");
+                                if ($stmt) {
+                                    $stmt->bind_param("sssssssiss", $title, $description, $date, $end_date_param, $start_time_param, $end_time_param, $location, $session_user_id, $department, $checkin_token);
+                                    if ($stmt->execute()) {
+                                        $executed = true;
+                                    }
+                                    $stmt->close();
                                 }
-                                $stmt->close();
+                            } else {
+                                $stmt = $conn->prepare("INSERT INTO events (title, description, date, start_time, end_time, location, organizer_id, department, status, checkin_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)");
+                                if ($stmt) {
+                                    $stmt->bind_param("ssssssiss", $title, $description, $date, $start_time_param, $end_time_param, $location, $session_user_id, $department, $checkin_token);
+                                    if ($stmt->execute()) {
+                                        $executed = true;
+                                    }
+                                    $stmt->close();
+                                }
                             }
                         }
                     }
@@ -674,7 +738,7 @@ $pageDeptCheckboxState = eventify_organizer_department_form_checkbox_state(
                 
                 <div class="form-group">
                     <label for="date">
-                        Event Date <span class="required">*</span>
+                        Start Date <span class="required">*</span>
                     </label>
                     <div class="input-icon">
                         <i class="fas fa-calendar-alt"></i>
@@ -688,6 +752,22 @@ $pageDeptCheckboxState = eventify_organizer_department_form_checkbox_state(
                             min="<?= date('Y-m-d') ?>"
                         >
                     </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="end_date">End Date</label>
+                    <div class="input-icon">
+                        <i class="fas fa-calendar-check"></i>
+                        <input
+                            type="date"
+                            id="end_date"
+                            name="end_date"
+                            class="form-control"
+                            value="<?= htmlspecialchars($_POST['end_date'] ?? '') ?>"
+                            min="<?= date('Y-m-d') ?>"
+                        >
+                    </div>
+                    <small class="text-muted" style="display:block;margin-top:6px;">Optional — use for multi-day or week-long events. Leave blank for a single day.</small>
                 </div>
 
                 <div class="form-group">
@@ -912,6 +992,20 @@ $pageDeptCheckboxState = eventify_organizer_department_form_checkbox_state(
             }
 
             if (cform) {
+                var dateEl = document.getElementById('date');
+                var endDateEl = document.getElementById('end_date');
+                if (dateEl && endDateEl) {
+                    var syncStandaloneEndMin = function () {
+                        if (dateEl.value) {
+                            endDateEl.min = dateEl.value;
+                            if (endDateEl.value && endDateEl.value < dateEl.value) {
+                                endDateEl.value = dateEl.value;
+                            }
+                        }
+                    };
+                    dateEl.addEventListener('change', syncStandaloneEndMin);
+                    syncStandaloneEndMin();
+                }
                 var allD = document.getElementById('standaloneDeptAll');
                 var specsD = cform.querySelectorAll('.standalone-dept-specific');
                 if (allD) {
@@ -970,8 +1064,17 @@ $pageDeptCheckboxState = eventify_organizer_department_form_checkbox_state(
             
             if (!date) {
                 e.preventDefault();
-                showMessageModal('Please select an event date.');
+                showMessageModal('Please select a start date.');
                 document.getElementById('date').focus();
+                return false;
+            }
+
+            var endDateEl = document.getElementById('end_date');
+            var endDateVal = endDateEl ? endDateEl.value : '';
+            if (endDateVal && endDateVal < date) {
+                e.preventDefault();
+                showMessageModal('End date cannot be before the start date.');
+                if (endDateEl) endDateEl.focus();
                 return false;
             }
 

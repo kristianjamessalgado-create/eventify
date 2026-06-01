@@ -27,10 +27,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 document.body.classList.toggle('admin-sidebar-open');
                 return;
             }
-            var collapsed = document.body.classList.toggle('admin-sidebar-collapsed');
-            if (adminSidebar) {
-                adminSidebar.classList.toggle('is-collapsed', collapsed);
-            }
+            document.body.classList.toggle('admin-sidebar-collapsed');
             refreshCalendarLayoutSmooth();
         });
     }
@@ -130,8 +127,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 datasets: [{
                     label: 'Events',
                     data: deptCounts,
-                    backgroundColor: 'rgba(14, 165, 233, 0.55)',
-                    borderColor: 'rgba(14, 165, 233, 1)',
+                    backgroundColor: 'rgba(230, 197, 74, 0.85)',
+                    borderColor: 'rgba(27, 74, 27, 1)',
                     borderWidth: 1
                 }]
             },
@@ -157,9 +154,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 datasets: [{
                     data: stData.counts || [],
                     backgroundColor: [
-                        'rgba(234, 179, 8, 0.85)',
-                        'rgba(16, 185, 129, 0.85)',
-                        'rgba(239, 68, 68, 0.85)',
+                        'rgba(230, 197, 74, 0.9)',
+                        'rgba(27, 74, 27, 0.85)',
+                        'rgba(185, 28, 28, 0.85)',
                         'rgba(100, 116, 139, 0.85)'
                     ],
                     borderWidth: 1
@@ -184,8 +181,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 datasets: [{
                     label: 'Feedback',
                     data: fData.counts || [],
-                    backgroundColor: 'rgba(99, 102, 241, 0.6)',
-                    borderColor: 'rgba(99, 102, 241, 1)',
+                    backgroundColor: 'rgba(61, 138, 53, 0.75)',
+                    borderColor: 'rgba(27, 74, 27, 1)',
                     borderWidth: 1
                 }]
             },

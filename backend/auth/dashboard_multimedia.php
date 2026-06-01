@@ -49,11 +49,23 @@ $stmt->close();
 $user_name  = $user['name'] ?? 'Multimedia';
 $user_department = $user['department'] ?? null;
 
-// Feature flag: photo publishing workflow (status column on event_photos)
+// Feature flag: photo publishing workflow (status column on event_photos).
+// Wrapped in try/catch so a missing event_photos table doesn't fatal-error the dashboard.
 $photoStatusEnabled = false;
-$chkCol = $conn->query("SHOW COLUMNS FROM event_photos LIKE 'status'");
-if ($chkCol && $chkCol->num_rows > 0) {
-    $photoStatusEnabled = true;
+$eventPhotosTableExists = false;
+try {
+    $tblChk = $conn->query("SHOW TABLES LIKE 'event_photos'");
+    $eventPhotosTableExists = (bool)($tblChk && $tblChk->num_rows > 0);
+} catch (Throwable $e) {
+    $eventPhotosTableExists = false;
+}
+if ($eventPhotosTableExists) {
+    try {
+        $chkCol = $conn->query("SHOW COLUMNS FROM event_photos LIKE 'status'");
+        $photoStatusEnabled = (bool)($chkCol && $chkCol->num_rows > 0);
+    } catch (Throwable $e) {
+        $photoStatusEnabled = false;
+    }
 }
 
 // Fetch all events (newest date first)
@@ -73,11 +85,23 @@ if ($photoStatusEnabled) {
           AND ({$deptWhere})
         ORDER BY e.date DESC, e.id DESC
     ";
-} else {
+} elseif ($eventPhotosTableExists) {
     $sqlEv = "
         SELECT e.id, e.title, e.date, e.location, e.department,
                (SELECT COUNT(*) FROM event_photos p WHERE p.event_id = e.id) AS photo_count,
                (SELECT COUNT(*) FROM event_photos p WHERE p.event_id = e.id AND p.uploaded_by = {$uid}) AS my_photo_count,
+               0 AS my_draft_count
+        FROM events e
+        WHERE e.title NOT LIKE 'sample%'
+          AND ({$deptWhere})
+        ORDER BY e.date DESC, e.id DESC
+    ";
+} else {
+    // event_photos table not yet created — return zero counts so the dashboard still loads.
+    $sqlEv = "
+        SELECT e.id, e.title, e.date, e.location, e.department,
+               0 AS photo_count,
+               0 AS my_photo_count,
                0 AS my_draft_count
         FROM events e
         WHERE e.title NOT LIKE 'sample%'
@@ -137,7 +161,7 @@ if (!empty($user_department)) {
 
 // Fetch photos per event so we can show thumbnails / gallery
 $photosByEvent = [];
-if (!empty($events)) {
+if ($eventPhotosTableExists && !empty($events)) {
     $ids = array_column($events, 'id');
     $placeholders = implode(',', array_fill(0, count($ids), '?'));
     $types = str_repeat('i', count($ids));

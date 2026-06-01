@@ -5,6 +5,24 @@ include __DIR__ . '/../../config/config.php';
 include __DIR__ . '/../../config/csrf.php';
 include __DIR__ . '/../../config/departments.php';
 require_once __DIR__ . '/../../config/organizer_departments.php';
+require_once __DIR__ . '/../lib/event_date_range.php';
+
+eventify_events_end_date_ensure($conn);
+
+/**
+ * @param string|null $time DB or POST time (HH:MM or HH:MM:SS)
+ */
+function eventify_edit_time_input(?string $time): string
+{
+    $time = trim((string) $time);
+    if ($time === '') {
+        return '';
+    }
+    if (preg_match('/^(\d{2}:\d{2})/', $time, $m)) {
+        return $m[1];
+    }
+    return $time;
+}
 
 // Require organizer login
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'organizer') {
@@ -16,6 +34,7 @@ $session_user_id = $_SESSION['user_id'];
 $error   = '';
 $success = '';
 $eventsHasMaxCapacity = false;
+$eventsHasEndDate = eventify_events_has_end_date($conn);
 
 try {
     $mcCol = $conn->query("SHOW COLUMNS FROM events WHERE Field = 'max_capacity'");
@@ -34,11 +53,12 @@ if ($event_id <= 0) {
 }
 
 // Fetch event and ensure it belongs to this organizer
+$selectSql = "SELECT id, title, description, date, end_date, start_time, end_time, location, department";
 if ($eventsHasMaxCapacity) {
-    $stmt = $conn->prepare("SELECT id, title, description, date, location, department, max_capacity FROM events WHERE id = ? AND organizer_id = ?");
-} else {
-    $stmt = $conn->prepare("SELECT id, title, description, date, location, department FROM events WHERE id = ? AND organizer_id = ?");
+    $selectSql .= ", max_capacity";
 }
+$selectSql .= " FROM events WHERE id = ? AND organizer_id = ?";
+$stmt = $conn->prepare($selectSql);
 if (!$stmt) {
     header("Location: " . BASE_URL . "/backend/auth/dashboardorganizer.php?msg=" . urlencode("Database error."));
     exit();
@@ -59,6 +79,9 @@ eventify_events_department_ensure_varchar($conn);
 if (!array_key_exists('max_capacity', $event)) {
     $event['max_capacity'] = null;
 }
+$event['end_date'] = $event['end_date'] ?? null;
+$event['start_time'] = $event['start_time'] ?? null;
+$event['end_time'] = $event['end_time'] ?? null;
 
 $eventDepartmentStored = (string) ($event['department'] ?? 'ALL');
 
@@ -80,6 +103,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $title       = trim($_POST['title'] ?? '');
     $description = trim($_POST['description'] ?? '');
     $date        = $_POST['date'] ?? '';
+    $end_date_raw = $_POST['end_date'] ?? '';
+    $start_time  = trim($_POST['start_time'] ?? '');
+    $end_time    = trim($_POST['end_time'] ?? '');
     $location    = trim($_POST['location'] ?? '');
     $max_capacity_raw = trim($_POST['max_capacity'] ?? '');
     $maxCapVal = null;
@@ -90,51 +116,154 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    $end_date_param = null;
+    $endTimeObj = null;
+
     if (empty($title)) {
         $error = "Title is required.";
     } elseif (empty($date)) {
-        $error = "Date is required.";
+        $error = "Start date is required.";
+    } elseif (empty($start_time)) {
+        $error = "Start time is required.";
     } elseif (empty($location)) {
         $error = "Location is required.";
     } elseif (strlen($title) > 150) {
         $error = "Title must be 150 characters or less.";
-    } elseif (strlen($location) > 100) {
-        $error = "Location must be 100 characters or less.";
+    } elseif (strlen($location) > 255) {
+        $error = "Location must be 255 characters or less.";
     } else {
-        // Validate date format
         $dateObj = DateTime::createFromFormat('Y-m-d', $date);
         if (!$dateObj || $dateObj->format('Y-m-d') !== $date) {
-            $error = "Invalid date format.";
+            $error = "Invalid start date format.";
         } else {
-            // Check if date is in the past
+            $startTimeObj = DateTime::createFromFormat('H:i', $start_time);
+            if (!$startTimeObj || $startTimeObj->format('H:i') !== $start_time) {
+                $error = "Invalid start time format.";
+            }
+
+            if (!$error && $end_time !== '') {
+                $endTimeObj = DateTime::createFromFormat('H:i', $end_time);
+                if (!$endTimeObj || $endTimeObj->format('H:i') !== $end_time) {
+                    $error = "Invalid end time format.";
+                }
+            }
+
             $today = new DateTime();
             $today->setTime(0, 0, 0);
             $eventDate = new DateTime($date);
             $eventDate->setTime(0, 0, 0);
 
-            if ($eventDate < $today) {
-                $error = "Event date cannot be in the past.";
-            } else {
+            if (!$error && $eventDate < $today) {
+                $error = "Event start date cannot be in the past.";
+            }
+
+            if (!$error && $eventsHasEndDate) {
+                $parsedEnd = eventify_parse_event_end_date($date, $end_date_raw);
+                if (!$parsedEnd['ok']) {
+                    $error = $parsedEnd['error'] ?? 'Invalid end date.';
+                } else {
+                    $end_date_param = $parsedEnd['value'];
+                }
+            }
+
+            if (!$error && $end_time !== '' && $endTimeObj && $end_date_param === null) {
+                if ($endTimeObj <= $startTimeObj) {
+                    $error = "End time must be after start time for a single-day event.";
+                }
+            }
+
+            if (!$error) {
                 $parsedDept = eventify_parse_event_departments_from_request($_POST);
                 if (!$parsedDept['ok']) {
                     $error = $parsedDept['error'] ?? 'Invalid department selection.';
                 } else {
                     $department = $parsedDept['department'];
                 }
+            }
 
-                if (!$error) {
-                    $oldTitle = (string)($event['title'] ?? 'this event');
-                    if ($eventsHasMaxCapacity) {
-                        $stmt = $conn->prepare("UPDATE events SET title = ?, description = ?, date = ?, location = ?, department = ?, max_capacity = ?, status = 'pending', reject_reason = NULL WHERE id = ? AND organizer_id = ?");
-                        if ($stmt) {
-                            $stmt->bind_param("sssssiii", $title, $description, $date, $location, $department, $maxCapVal, $event_id, $session_user_id);
-                        }
-                    } else {
-                        $stmt = $conn->prepare("UPDATE events SET title = ?, description = ?, date = ?, location = ?, department = ?, status = 'pending', reject_reason = NULL WHERE id = ? AND organizer_id = ?");
-                        if ($stmt) {
-                            $stmt->bind_param("sssssii", $title, $description, $date, $location, $department, $event_id, $session_user_id);
-                        }
+            if (!$error) {
+                $oldTitle = (string)($event['title'] ?? 'this event');
+                $start_time_param = $start_time ?: null;
+                $end_time_param = $end_time !== '' ? $end_time : null;
+                $stmt = null;
+
+                if ($eventsHasMaxCapacity && $eventsHasEndDate) {
+                    $stmt = $conn->prepare(
+                        "UPDATE events SET title = ?, description = ?, date = ?, end_date = ?, start_time = ?, end_time = ?, location = ?, department = ?, max_capacity = ?, status = 'pending', reject_reason = NULL WHERE id = ? AND organizer_id = ?"
+                    );
+                    if ($stmt) {
+                        $stmt->bind_param(
+                            "ssssssssiii",
+                            $title,
+                            $description,
+                            $date,
+                            $end_date_param,
+                            $start_time_param,
+                            $end_time_param,
+                            $location,
+                            $department,
+                            $maxCapVal,
+                            $event_id,
+                            $session_user_id
+                        );
                     }
+                } elseif ($eventsHasMaxCapacity) {
+                    $stmt = $conn->prepare(
+                        "UPDATE events SET title = ?, description = ?, date = ?, start_time = ?, end_time = ?, location = ?, department = ?, max_capacity = ?, status = 'pending', reject_reason = NULL WHERE id = ? AND organizer_id = ?"
+                    );
+                    if ($stmt) {
+                        $stmt->bind_param(
+                            "sssssssiii",
+                            $title,
+                            $description,
+                            $date,
+                            $start_time_param,
+                            $end_time_param,
+                            $location,
+                            $department,
+                            $maxCapVal,
+                            $event_id,
+                            $session_user_id
+                        );
+                    }
+                } elseif ($eventsHasEndDate) {
+                    $stmt = $conn->prepare(
+                        "UPDATE events SET title = ?, description = ?, date = ?, end_date = ?, start_time = ?, end_time = ?, location = ?, department = ?, status = 'pending', reject_reason = NULL WHERE id = ? AND organizer_id = ?"
+                    );
+                    if ($stmt) {
+                        $stmt->bind_param(
+                            "ssssssssii",
+                            $title,
+                            $description,
+                            $date,
+                            $end_date_param,
+                            $start_time_param,
+                            $end_time_param,
+                            $location,
+                            $department,
+                            $event_id,
+                            $session_user_id
+                        );
+                    }
+                } else {
+                    $stmt = $conn->prepare(
+                        "UPDATE events SET title = ?, description = ?, date = ?, start_time = ?, end_time = ?, location = ?, department = ?, status = 'pending', reject_reason = NULL WHERE id = ? AND organizer_id = ?"
+                    );
+                    if ($stmt) {
+                        $stmt->bind_param(
+                            "sssssssii",
+                            $title,
+                            $description,
+                            $date,
+                            $start_time_param,
+                            $end_time_param,
+                            $location,
+                            $department,
+                            $event_id,
+                            $session_user_id
+                        );
+                    }
+                }
 
                     if (!$stmt) {
                         $error = "Database error. Please try again.";
@@ -229,12 +358,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
         }
-    }
 
     // If there was an error, keep form values from POST
     $event['title']       = $title;
     $event['description'] = $description;
     $event['date']        = $date;
+    $event['end_date']    = $end_date_raw;
+    $event['start_time']  = $start_time;
+    $event['end_time']    = $end_time;
     $event['location']    = $location;
     $event['max_capacity'] = $maxCapVal;
     $deptPostErr = isset($_POST['department'])
@@ -254,6 +385,13 @@ $stmt->bind_result($db_name);
 $stmt->fetch();
 $user_name = $db_name ?? 'Organizer';
 $stmt->close();
+
+$editEndDateValue = '';
+if (!empty($event['end_date'])) {
+    $editEndDateValue = substr(trim((string) $event['end_date']), 0, 10);
+}
+$editStartTimeValue = eventify_edit_time_input($event['start_time'] ?? '');
+$editEndTimeValue = eventify_edit_time_input($event['end_time'] ?? '');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -624,21 +762,78 @@ $stmt->close();
                     ><?= htmlspecialchars($event['description'] ?? '') ?></textarea>
                 </div>
 
-                <div class="form-group">
-                    <label for="date">
-                        Event Date <span class="required">*</span>
-                    </label>
-                    <div class="input-icon">
-                        <i class="fas fa-calendar-alt"></i>
-                        <input
-                            type="date"
-                            id="date"
-                            name="date"
-                            class="form-control"
-                            value="<?= htmlspecialchars($event['date'] ?? '') ?>"
-                            required
-                            min="<?= date('Y-m-d') ?>"
-                        >
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <div class="form-group mb-0">
+                            <label for="date">
+                                Start Date <span class="required">*</span>
+                            </label>
+                            <div class="input-icon">
+                                <i class="fas fa-calendar-alt"></i>
+                                <input
+                                    type="date"
+                                    id="date"
+                                    name="date"
+                                    class="form-control"
+                                    value="<?= htmlspecialchars(substr(trim((string)($event['date'] ?? '')), 0, 10)) ?>"
+                                    required
+                                    min="<?= date('Y-m-d') ?>"
+                                >
+                            </div>
+                        </div>
+                    </div>
+                    <?php if ($eventsHasEndDate): ?>
+                    <div class="col-md-6">
+                        <div class="form-group mb-0">
+                            <label for="end_date">End Date</label>
+                            <div class="input-icon">
+                                <i class="fas fa-calendar-check"></i>
+                                <input
+                                    type="date"
+                                    id="end_date"
+                                    name="end_date"
+                                    class="form-control"
+                                    value="<?= htmlspecialchars($editEndDateValue) ?>"
+                                    min="<?= date('Y-m-d') ?>"
+                                >
+                            </div>
+                            <small class="text-muted d-block mt-1">Optional — for multi-day events. Leave blank for a single day.</small>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+                    <div class="col-md-6">
+                        <div class="form-group mb-0">
+                            <label for="start_time">
+                                Start Time <span class="required">*</span>
+                            </label>
+                            <div class="input-icon">
+                                <i class="fas fa-clock"></i>
+                                <input
+                                    type="time"
+                                    id="start_time"
+                                    name="start_time"
+                                    class="form-control"
+                                    value="<?= htmlspecialchars($editStartTimeValue) ?>"
+                                    required
+                                >
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group mb-0">
+                            <label for="end_time">End Time</label>
+                            <div class="input-icon">
+                                <i class="fas fa-clock"></i>
+                                <input
+                                    type="time"
+                                    id="end_time"
+                                    name="end_time"
+                                    class="form-control"
+                                    value="<?= htmlspecialchars($editEndTimeValue) ?>"
+                                >
+                            </div>
+                            <small class="text-muted d-block mt-1">Optional — on the last day for multi-day events.</small>
+                        </div>
                     </div>
                 </div>
 
@@ -656,7 +851,7 @@ $stmt->close();
                             placeholder="Enter event location"
                             value="<?= htmlspecialchars($event['location'] ?? '') ?>"
                             required
-                            maxlength="100"
+                            maxlength="255"
                         >
                     </div>
                 </div>
@@ -775,6 +970,27 @@ $stmt->close();
                     if (cb.checked && allCb) allCb.checked = false;
                 });
             });
+
+            var startDateEl = document.getElementById('date');
+            var endDateEl = document.getElementById('end_date');
+            if (startDateEl && endDateEl) {
+                var syncEndMin = function () {
+                    if (startDateEl.value) {
+                        endDateEl.min = startDateEl.value;
+                        if (endDateEl.value && endDateEl.value < startDateEl.value) {
+                            endDateEl.value = startDateEl.value;
+                        }
+                    }
+                };
+                startDateEl.addEventListener('change', syncEndMin);
+                endDateEl.addEventListener('change', function () {
+                    if (startDateEl.value && endDateEl.value && endDateEl.value < startDateEl.value) {
+                        showMessageModal('End date cannot be before the start date.');
+                        endDateEl.value = startDateEl.value;
+                    }
+                });
+                syncEndMin();
+            }
         })();
 
         (function () {
@@ -794,6 +1010,10 @@ $stmt->close();
             form.addEventListener('submit', function(e) {
                 const title = document.getElementById('title').value.trim();
                 const date  = document.getElementById('date').value;
+                const startTimeEl = document.getElementById('start_time');
+                const startTime = startTimeEl ? startTimeEl.value : '';
+                const endDateEl = document.getElementById('end_date');
+                const endDateVal = endDateEl ? endDateEl.value : '';
                 const loc   = document.getElementById('location').value.trim();
                 const allCb = document.getElementById('editDeptAll');
                 const specifics = form.querySelectorAll('.edit-dept-specific');
@@ -814,8 +1034,22 @@ $stmt->close();
 
                 if (!date) {
                     e.preventDefault();
-                    showMessageModal('Please select an event date.');
+                    showMessageModal('Please select a start date.');
                     document.getElementById('date').focus();
+                    return false;
+                }
+
+                if (!startTime) {
+                    e.preventDefault();
+                    showMessageModal('Please select a start time.');
+                    if (startTimeEl) startTimeEl.focus();
+                    return false;
+                }
+
+                if (endDateVal && endDateVal < date) {
+                    e.preventDefault();
+                    showMessageModal('End date cannot be before the start date.');
+                    if (endDateEl) endDateEl.focus();
                     return false;
                 }
 
@@ -828,11 +1062,11 @@ $stmt->close();
 
                 const today    = new Date();
                 today.setHours(0, 0, 0, 0);
-                const eventDate = new Date(date);
+                const eventDate = new Date(date + 'T00:00:00');
 
                 if (eventDate < today) {
                     e.preventDefault();
-                    showMessageModal('Event date cannot be in the past.');
+                    showMessageModal('Event start date cannot be in the past.');
                     document.getElementById('date').focus();
                     return false;
                 }
